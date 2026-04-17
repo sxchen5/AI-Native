@@ -1,0 +1,7 @@
+**/target/
+**/.idea/
+**/.vscode/
+**/*.iml
+
+chat-ui/node_modules/
+chat-ui/dist/

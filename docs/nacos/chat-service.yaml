@@ -1,0 +1,13 @@
+# 在 Nacos 控制台创建配置：
+# Data ID: chat-service.yaml
+# Group: DEFAULT_GROUP（或与你 bootstrap.yml 中的 spring.cloud.nacos.config.group 一致）
+# 配置格式: YAML
+
+spring:
+  ai:
+    openai-sdk:
+      api-key: ${OPENAI_API_KEY}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${OPENAI_MODEL:gpt-4o-mini}

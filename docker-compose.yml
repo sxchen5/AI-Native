@@ -1,0 +1,16 @@
+services:
+  nacos:
+    image: nacos/nacos-server:v2.3.2
+    container_name: nacos-2-3-2
+    environment:
+      MODE: standalone
+      # 单机模式默认内置 Derby；如需外置 MySQL 请参考 Nacos 官方文档
+      NACOS_AUTH_ENABLE: "false"
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8848/nacos/"]
+      interval: 5s
+      timeout: 3s
+      retries: 30

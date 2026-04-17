@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: chat-service
+  cloud:
+    # Spring Cloud 2024.0.x 官方校验默认要求 Boot 3.4+；本项目按需求固定 Boot 3.3.x，因此关闭该校验
+    compatibility-verifier:
+      enabled: false
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: ${NACOS_GROUP:DEFAULT_GROUP}
+      config:
+        server-addr: ${NACOS_SERVER:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: ${NACOS_GROUP:DEFAULT_GROUP}
+        file-extension: yaml
+        import-check:
+          enabled: false
+        extension-configs:
+          - data-id: ${spring.application.name}.yaml
+            group: ${NACOS_GROUP:DEFAULT_GROUP}
+            refresh: true

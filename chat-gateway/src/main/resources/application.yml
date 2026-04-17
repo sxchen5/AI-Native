@@ -1,0 +1,32 @@
+server:
+  port: 8080
+
+spring:
+  codec:
+    # SSE 流式透传：避免大缓冲导致网关内存限制过小（可按需调大）
+    max-in-memory-size: 16MB
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        # 聊天与静态 API 统一转发到 chat-service（保持路径不变）
+        - id: chat-service-api
+          uri: lb://chat-service
+          predicates:
+            - Path=/api/**
+      httpclient:
+        connect-timeout: 5000
+        response-timeout: 600s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO
