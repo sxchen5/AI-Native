@@ -1,0 +1,8 @@
+# 本地无 Nacos 时的应急配置（启动参数：--spring.profiles.active=no-nacos）
+spring:
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+      config:
+        enabled: false

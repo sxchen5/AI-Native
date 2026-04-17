@@ -1,0 +1,9 @@
+# 在 Nacos 控制台创建配置：
+# Data ID: chat-gateway.yaml
+# Group: DEFAULT_GROUP
+
+# 网关通常只需要少量动态配置；此处预留扩展位
+spring:
+  cloud:
+    gateway:
+      default-filters: []

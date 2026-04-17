@@ -1,0 +1,24 @@
+# 启动早期加载：服务名 + Nacos 地址（注册发现与配置中心）
+spring:
+  application:
+    name: chat-gateway
+  cloud:
+    compatibility-verifier:
+      enabled: false
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: ${NACOS_GROUP:DEFAULT_GROUP}
+      config:
+        server-addr: ${NACOS_SERVER:127.0.0.1:8848}
+        namespace: ${NACOS_NAMESPACE:}
+        group: ${NACOS_GROUP:DEFAULT_GROUP}
+        file-extension: yaml
+        import-check:
+          enabled: false
+        # 从 Nacos 拉取与本服务同名的远程配置（需在控制台创建 DataId=chat-gateway.yaml）
+        extension-configs:
+          - data-id: ${spring.application.name}.yaml
+            group: ${NACOS_GROUP:DEFAULT_GROUP}
+            refresh: true

@@ -1,0 +1,33 @@
+:root {
+  color-scheme: light;
+  --bg: #f6f7fb;
+  --panel: #ffffff;
+  --border: #e8eaf0;
+  --text: #1f2328;
+  --muted: #6b7280;
+  --brand: #2b6cff;
+  --bubble-user: #2b6cff;
+  --bubble-assistant: #f3f4f6;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    Helvetica,
+    Arial,
+    'Apple Color Emoji',
+    'Segoe UI Emoji';
+  background: var(--bg);
+  color: var(--text);
+}

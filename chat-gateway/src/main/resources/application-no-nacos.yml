@@ -1,0 +1,14 @@
+# 本地无 Nacos 时的应急配置（启动参数：--spring.profiles.active=no-nacos）
+spring:
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+      config:
+        enabled: false
+    gateway:
+      routes:
+        - id: chat-service-api
+          uri: http://127.0.0.1:8081
+          predicates:
+            - Path=/api/**

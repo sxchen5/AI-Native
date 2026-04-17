@@ -1,0 +1,37 @@
+server:
+  port: 8081
+
+spring:
+  main:
+    # Spring Boot 3.3 + 部分生态组件会重复注册同名 Jackson 模块 Bean；允许后者覆盖前者，避免启动失败
+    allow-bean-definition-overriding: true
+  autoconfigure:
+    exclude:
+      # 使用 OpenAiManualConfiguration 显式装配；避免依赖 jar 内的自动配置与手动 Bean 冲突
+      - org.springframework.ai.model.openaisdk.autoconfigure.OpenAiSdkChatAutoConfiguration
+      - org.springframework.ai.model.openaisdk.autoconfigure.OpenAiSdkEmbeddingAutoConfiguration
+      - org.springframework.ai.model.openaisdk.autoconfigure.OpenAiSdkImageAutoConfiguration
+      - org.springframework.ai.model.openaisdk.autoconfigure.OpenAiSdkAudioSpeechAutoConfiguration
+  application:
+    name: chat-service
+  # Spring AI 2.0（OpenAI Java SDK 集成路径）
+  # - OpenAI：默认 base-url + OPENAI_API_KEY
+  # - 通义千问兼容模式：base-url=https://dashscope.aliyuncs.com/compatible-mode/v1
+  # - 百度千帆 OpenAI 兼容：base-url=https://qianfan.baidubce.com/v2
+  ai:
+    openai-sdk:
+      api-key: ${OPENAI_API_KEY:changeme}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${OPENAI_MODEL:gpt-4o-mini}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    org.springframework.ai: INFO
