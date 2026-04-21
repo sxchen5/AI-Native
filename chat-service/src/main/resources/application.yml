@@ -1,5 +1,8 @@
 server:
   port: 8081
+  # 浏览器 SSE 长连接：避免 Tomcat 在模型仍输出时先断开客户端
+  tomcat:
+    connection-timeout: ${TOMCAT_CONNECTION_TIMEOUT:1800000}
 
 spring:
   servlet:
@@ -28,6 +31,9 @@ spring:
     openai-sdk:
       api-key: ${OPENAI_API_KEY:changeme}
       base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      # 流式长回复时 OkHttp 默认超时偏短会报 OpenAIIoException: Stream failed / InterruptedIOException: timeout
+      # 可用环境变量 OPENAI_HTTP_TIMEOUT 覆盖，例如 20m、3600s
+      timeout: ${OPENAI_HTTP_TIMEOUT:15m}
       chat:
         options:
           model: ${OPENAI_MODEL:gpt-4o-mini}
