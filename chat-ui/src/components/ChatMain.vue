@@ -170,6 +170,7 @@ watch(
   (v) => {
     if (!v) {
       void nextTick(() => updateScrollBottomState())
+      void loadFollowUps()
     }
   },
 )
