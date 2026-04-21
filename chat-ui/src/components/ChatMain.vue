@@ -1,20 +1,47 @@
 <script setup lang="ts">
-import { Promotion, DocumentCopy, Loading } from '@element-plus/icons-vue'
+import {
+  CircleClose,
+  DocumentCopy,
+  EditPen,
+  Loading,
+  Microphone,
+  Promotion,
+  RefreshRight,
+  Top,
+  Bottom,
+} from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { nextTick, ref, watch } from 'vue'
+import { nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { ChatMessage } from '../api/types'
 import { useChatStore } from '../stores/chat'
 import { renderAiMarkdown } from '../utils/markdown'
+import { markdownToPlainText } from '../utils/plainText'
 
 const { t } = useI18n()
 const chat = useChatStore()
 
 const bottomAnchor = ref<HTMLElement | null>(null)
+/** 用户消息可编辑副本（与列表 id 对齐） */
+const userEdits = reactive<Record<string, string>>({})
+/** 对 AI 消息的点赞/点踩 */
+const feedback = reactive<Record<string, 'up' | 'down' | null>>({})
+
+const canvasOpen = ref(false)
+const canvasText = ref('')
+const canvasMessageId = ref<string | null>(null)
 
 function md(html: string) {
   return renderAiMarkdown(html)
+}
+
+function syncUserEditsFromMessages() {
+  for (const m of chat.messages) {
+    if (m.role === 'USER' && userEdits[m.id] === undefined) {
+      userEdits[m.id] = m.content
+    }
+  }
 }
 
 async function scrollToBottom(smooth = true) {
@@ -24,8 +51,11 @@ async function scrollToBottom(smooth = true) {
 
 watch(
   () => chat.messages,
-  () => scrollToBottom(true),
-  { deep: true },
+  () => {
+    syncUserEditsFromMessages()
+    void scrollToBottom(true)
+  },
+  { deep: true, immediate: true },
 )
 
 watch(
@@ -33,7 +63,7 @@ watch(
   () => scrollToBottom(false),
 )
 
-async function copyAssistant(text: string) {
+async function copyText(text: string) {
   try {
     await navigator.clipboard.writeText(text)
     ElMessage.success(t('session.copied'))
@@ -49,22 +79,19 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
-async function onSend() {
-  const sid = chat.activeSessionId
-  const text = chat.inputDraft.trim()
-  if (!sid || !text || chat.sending) return
-
-  chat.inputDraft = ''
-
-  const userMsg: ChatMessage = {
-    id: `local-user-${Date.now()}`,
-    role: 'USER',
-    content: text,
-    createdAt: new Date().toISOString(),
+function findPreviousUserMessage(fromIndex: number): ChatMessage | null {
+  for (let i = fromIndex - 1; i >= 0; i--) {
+    if (chat.messages[i]!.role === 'USER') return chat.messages[i]!
   }
-  chat.messages = [...chat.messages, userMsg]
-  await scrollToBottom(false)
+  return null
+}
 
+function runStream(
+  userText: string,
+  restartFromUserMessageId: string | undefined,
+  afterDone?: () => void,
+) {
+  const sid = chat.activeSessionId!
   let assistantId = ''
   let assistantContent = ''
 
@@ -76,8 +103,9 @@ async function onSend() {
   }
   chat.messages = [...chat.messages, assistantPlaceholder]
 
-  try {
-    await chat.sendStream(sid, text, {
+  return chat
+    .sendStream(sid, userText, {
+      restartFromUserMessageId: restartFromUserMessageId ?? undefined,
       onStart(id) {
         assistantId = id
         assistantContent = ''
@@ -95,21 +123,97 @@ async function onSend() {
       async onDone() {
         await chat.fetchMessages(sid)
         await chat.fetchSessions()
+        syncUserEditsFromMessages()
         await scrollToBottom(true)
+        afterDone?.()
       },
     })
-  } catch (e: unknown) {
-    if ((e as Error).name === 'AbortError') {
-      ElMessage.info(t('errors.stopped'))
-    } else {
-      ElMessage.error((e as Error).message || t('errors.send'))
-    }
-    try {
-      await chat.fetchMessages(sid)
-    } catch {
-      /* ignore */
-    }
+    .catch((e: unknown) => {
+      if ((e as Error).name === 'AbortError') {
+        ElMessage.info(t('errors.stopped'))
+      } else {
+        ElMessage.error((e as Error).message || t('errors.send'))
+      }
+      return chat.fetchMessages(sid)
+    })
+}
+
+async function onSend() {
+  const sid = chat.activeSessionId
+  const text = chat.inputDraft.trim()
+  if (!sid || !text || chat.sending) return
+
+  chat.inputDraft = ''
+
+  const userMsg: ChatMessage = {
+    id: `local-user-${Date.now()}`,
+    role: 'USER',
+    content: text,
+    createdAt: new Date().toISOString(),
   }
+  chat.messages = [...chat.messages, userMsg]
+  userEdits[userMsg.id] = text
+  await scrollToBottom(false)
+
+  await runStream(text, undefined)
+}
+
+async function resendUserMessage(userMsgId: string) {
+  const sid = chat.activeSessionId
+  if (!sid || chat.sending) return
+  const idx = chat.messages.findIndex((m) => m.id === userMsgId)
+  if (idx < 0) return
+  const text = (userEdits[userMsgId] ?? '').trim()
+  if (!text) {
+    ElMessage.warning(t('chat.emptySend'))
+    return
+  }
+  chat.messages = chat.messages.slice(0, idx + 1)
+  await runStream(text, userMsgId)
+}
+
+async function regenerateAssistant(assistantIndex: number) {
+  const sid = chat.activeSessionId
+  if (!sid || chat.sending) return
+  const prevUser = findPreviousUserMessage(assistantIndex)
+  if (!prevUser) {
+    ElMessage.warning(t('chat.noUserBefore'))
+    return
+  }
+  const text = (userEdits[prevUser.id] ?? prevUser.content).trim()
+  // 去掉当前 AI 及之后消息；后端会截断并重新生成
+  chat.messages = chat.messages.slice(0, assistantIndex)
+  await runStream(text, prevUser.id)
+}
+
+function setFeedback(msgId: string, v: 'up' | 'down') {
+  feedback[msgId] = feedback[msgId] === v ? null : v
+}
+
+function speakAssistant(text: string) {
+  const plain = markdownToPlainText(text)
+  if (!plain) return
+  window.speechSynthesis.cancel()
+  const u = new SpeechSynthesisUtterance(plain)
+  const loc = navigator.language || 'zh-CN'
+  u.lang = loc.startsWith('zh') ? 'zh-CN' : 'en-US'
+  window.speechSynthesis.speak(u)
+}
+
+function openCanvas(msg: ChatMessage) {
+  canvasMessageId.value = msg.id
+  canvasText.value = msg.content
+  canvasOpen.value = true
+}
+
+function applyCanvas() {
+  if (!canvasMessageId.value) return
+  const id = canvasMessageId.value
+  chat.messages = chat.messages.map((m) =>
+    m.id === id ? { ...m, content: canvasText.value } : m,
+  )
+  canvasOpen.value = false
+  ElMessage.success(t('chat.canvasApplied'))
 }
 </script>
 
@@ -123,14 +227,35 @@ async function onSend() {
       <div v-else-if="chat.loadingMessages" class="muted center">{{ t('chat.loadingMessages') }}</div>
       <div v-else class="msg-inner">
         <div
-          v-for="m in chat.messages"
+          v-for="(m, idx) in chat.messages"
           :key="m.id"
           class="row"
           :class="m.role === 'USER' ? 'end' : 'start'"
         >
           <div class="msg-animate bubble-wrap" :class="m.role === 'USER' ? 'user' : 'ai'">
             <div v-if="m.role === 'ASSISTANT'" class="ai-label">{{ t('chat.assistant') }}</div>
-            <div v-if="m.role === 'USER'" class="bubble user">{{ m.content }}</div>
+
+            <div v-if="m.role === 'USER'" class="user-block">
+              <el-input
+                v-model="userEdits[m.id]"
+                type="textarea"
+                :autosize="{ minRows: 1, maxRows: 12 }"
+                resize="none"
+                class="user-input"
+                :disabled="chat.sending"
+              />
+              <div class="user-actions">
+                <el-button text size="small" @click="copyText(userEdits[m.id] || '')">
+                  <el-icon><DocumentCopy /></el-icon>
+                  {{ t('chat.copy') }}
+                </el-button>
+                <el-button text size="small" type="primary" :disabled="chat.sending" @click="resendUserMessage(m.id)">
+                  <el-icon><Promotion /></el-icon>
+                  {{ t('chat.resend') }}
+                </el-button>
+              </div>
+            </div>
+
             <div v-else class="bubble ai">
               <div v-if="m.content.length === 0 && chat.sending" class="typing">
                 <el-icon class="spin"><Loading /></el-icon>
@@ -138,18 +263,44 @@ async function onSend() {
               </div>
               <div v-else class="prose-ai" v-html="md(m.content)" />
             </div>
-            <div class="meta">
-              <time>{{ new Date(m.createdAt).toLocaleString() }}</time>
+
+            <div v-if="m.role === 'ASSISTANT'" class="ai-toolbar">
+              <el-button text size="small" @click="copyText(m.content)">
+                <el-icon><DocumentCopy /></el-icon>
+                {{ t('chat.copy') }}
+              </el-button>
+              <el-button text size="small" :disabled="chat.sending" @click="regenerateAssistant(idx)">
+                <el-icon><RefreshRight /></el-icon>
+                {{ t('chat.regenerate') }}
+              </el-button>
               <el-button
-                v-if="m.role === 'ASSISTANT' && m.content"
                 text
                 size="small"
-                class="copy-btn"
-                @click="copyAssistant(m.content)"
+                :type="feedback[m.id] === 'up' ? 'primary' : 'default'"
+                @click="setFeedback(m.id, 'up')"
               >
-                <el-icon><DocumentCopy /></el-icon>
-                {{ t('session.copy') }}
+                <el-icon><Top /></el-icon>
               </el-button>
+              <el-button
+                text
+                size="small"
+                :type="feedback[m.id] === 'down' ? 'danger' : 'default'"
+                @click="setFeedback(m.id, 'down')"
+              >
+                <el-icon><Bottom /></el-icon>
+              </el-button>
+              <el-button text size="small" @click="speakAssistant(m.content)">
+                <el-icon><Microphone /></el-icon>
+                {{ t('chat.speak') }}
+              </el-button>
+              <el-button text size="small" @click="openCanvas(m)">
+                <el-icon><EditPen /></el-icon>
+                {{ t('chat.toCanvas') }}
+              </el-button>
+            </div>
+
+            <div class="meta">
+              <time>{{ new Date(m.createdAt).toLocaleString() }}</time>
             </div>
           </div>
         </div>
@@ -158,28 +309,39 @@ async function onSend() {
     </div>
 
     <footer class="composer">
-      <el-input
-        v-model="chat.inputDraft"
-        type="textarea"
-        :rows="3"
-        resize="none"
-        :placeholder="t('chat.inputPlaceholder')"
-        :disabled="!chat.activeSessionId || chat.sending"
-        @keydown="onKeydown"
-      />
-      <div class="composer-actions">
-        <el-button v-if="chat.sending" @click="chat.stopStream()">{{ t('chat.stop') }}</el-button>
-        <el-button
-          type="primary"
-          :icon="Promotion"
-          :loading="chat.sending"
-          :disabled="!chat.activeSessionId || !chat.inputDraft.trim()"
-          @click="onSend"
-        >
-          {{ t('chat.send') }}
-        </el-button>
+      <div class="composer-inner">
+        <el-input
+          v-model="chat.inputDraft"
+          type="textarea"
+          :autosize="{ minRows: 3, maxRows: 8 }"
+          resize="none"
+          class="composer-input"
+          :placeholder="t('chat.inputPlaceholder')"
+          :disabled="!chat.activeSessionId"
+          @keydown="onKeydown"
+        />
+        <el-tooltip :content="chat.sending ? t('chat.stop') : t('chat.send')" placement="top">
+          <el-button
+            class="send-fab"
+            type="primary"
+            circle
+            :disabled="!chat.activeSessionId || (!chat.sending && !chat.inputDraft.trim())"
+            @click="chat.sending ? chat.stopStream() : onSend()"
+          >
+            <el-icon v-if="chat.sending" class="fab-icon"><CircleClose /></el-icon>
+            <el-icon v-else class="fab-icon"><Promotion /></el-icon>
+          </el-button>
+        </el-tooltip>
       </div>
     </footer>
+
+    <el-dialog v-model="canvasOpen" :title="t('chat.canvasTitle')" width="min(720px, 92vw)" destroy-on-close>
+      <el-input v-model="canvasText" type="textarea" :rows="16" :placeholder="t('chat.canvasHint')" />
+      <template #footer>
+        <el-button @click="canvasOpen = false">{{ t('session.cancel') }}</el-button>
+        <el-button type="primary" @click="applyCanvas">{{ t('chat.canvasApply') }}</el-button>
+      </template>
+    </el-dialog>
   </main>
 </template>
 
@@ -242,12 +404,6 @@ async function onSend() {
 .bubble-wrap {
   max-width: min(720px, 92%);
 }
-.bubble-wrap.user .bubble {
-  border-radius: 16px 16px 4px 16px;
-}
-.bubble-wrap.ai .bubble {
-  border-radius: 16px 16px 16px 4px;
-}
 
 .ai-label {
   font-size: 11px;
@@ -258,43 +414,61 @@ async function onSend() {
   text-transform: uppercase;
 }
 
-.bubble {
+.user-block {
+  width: 100%;
+}
+.user-input :deep(.el-textarea__inner) {
+  border-radius: 16px 16px 4px 16px;
+  background: var(--bg-bubble-user);
+  color: #fff;
+  border: none;
+  box-shadow: var(--shadow-sm);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.user-input :deep(.el-textarea__inner::placeholder) {
+  color: rgba(255, 255, 255, 0.65);
+}
+.user-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  justify-content: flex-end;
+}
+.user-actions :deep(.el-button) {
+  color: var(--text-secondary);
+}
+.user-actions :deep(.el-button--primary) {
+  color: var(--accent);
+}
+
+.bubble.ai {
   padding: 12px 14px;
   line-height: 1.55;
   font-size: 14px;
-  border: 1px solid transparent;
-  box-shadow: var(--shadow-sm);
-  transition:
-    background 0.35s ease,
-    color 0.35s ease,
-    border-color 0.35s ease;
-}
-.bubble.user {
-  background: var(--bg-bubble-user);
-  color: #fff;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.bubble.ai {
+  border-radius: 16px 16px 16px 4px;
   background: var(--bg-bubble-ai);
   color: var(--text-primary);
-  border-color: var(--border-subtle);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-sm);
+}
+
+.ai-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  margin-top: 8px;
+  align-items: center;
+}
+.ai-toolbar :deep(.el-button) {
+  font-size: 12px;
+  padding: 4px 6px;
 }
 
 .meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
+  margin-top: 4px;
   font-size: 11px;
   color: var(--text-muted);
-}
-
-.copy-btn {
-  padding: 0 4px;
-  height: auto;
-  font-size: 11px;
-  color: var(--accent);
 }
 
 .typing {
@@ -347,25 +521,35 @@ async function onSend() {
 .composer {
   border-top: 1px solid var(--border-subtle);
   background: var(--bg-elevated);
-  padding: 14px 16px 16px;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
-  align-items: end;
+  padding: 12px 16px 14px;
   box-shadow: 0 -4px 24px rgba(15, 23, 42, 0.06);
   transition:
     background 0.35s ease,
     border-color 0.35s ease;
 }
 
-.composer-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.composer-inner {
+  position: relative;
+  max-width: 880px;
+  margin: 0 auto;
 }
 
-.composer :deep(.el-textarea__inner) {
-  border-radius: var(--radius-md, 10px);
+.composer-input :deep(.el-textarea__inner) {
+  border-radius: var(--radius-lg, 14px);
+  padding: 12px 52px 12px 14px;
+  min-height: 88px !important;
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.send-fab {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 40px;
+  height: 40px;
+  box-shadow: var(--shadow-md);
+}
+.fab-icon {
+  font-size: 18px;
 }
 </style>

@@ -6,13 +6,16 @@ import en from 'element-plus/es/locale/lang/en'
 import ChatWorkspace from './components/ChatWorkspace.vue'
 import { useLocaleStore } from './stores/locale'
 import { useThemeStore } from './stores/theme'
+import { useUiStore } from './stores/ui'
 
 const localeStore = useLocaleStore()
 const themeStore = useThemeStore()
+const uiStore = useUiStore()
 
 onBeforeMount(() => {
   themeStore.init()
   localeStore.init()
+  uiStore.init()
 })
 
 const elementLocale = computed(() => (localeStore.locale === 'en-US' ? en : zhCn))

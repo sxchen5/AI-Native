@@ -27,7 +27,10 @@
     "sendingWarn": "A reply is being generated. Please wait or stop first.",
     "copy": "Copy reply",
     "copied": "Copied",
-    "copyFail": "Copy failed"
+    "copyFail": "Copy failed",
+    "alreadyEmpty": "You already have an empty new chat.",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar"
   },
   "chat": {
     "emptyTitle": "Start a conversation",
@@ -38,7 +41,18 @@
     "send": "Send",
     "stop": "Stop",
     "refresh": "Refresh",
-    "assistant": "Assistant"
+    "assistant": "Assistant",
+    "copy": "Copy",
+    "resend": "Resend",
+    "regenerate": "Regenerate",
+    "speak": "Read aloud",
+    "toCanvas": "Edit in canvas",
+    "canvasTitle": "Canvas editor",
+    "canvasHint": "Edit Markdown here and apply to this assistant message (local display only)",
+    "canvasApply": "Apply to message",
+    "canvasApplied": "Applied to the message",
+    "emptySend": "Message cannot be empty",
+    "noUserBefore": "No previous user message found"
   },
   "errors": {
     "loadSessions": "Failed to load conversations",

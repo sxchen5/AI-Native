@@ -3,6 +3,7 @@ package com.example.doubaoai.chatservice.web;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
 import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import com.example.doubaoai.chatservice.domain.ChatRole;
 import com.example.doubaoai.chatservice.domain.ChatSession;
 import com.example.doubaoai.chatservice.domain.StoredMessage;
 import com.example.doubaoai.chatservice.service.ChatAiStreamService;
@@ -56,13 +58,52 @@ public class ChatStreamController {
             return emitter;
         }
 
-        // 持久化用户消息，并准备助手占位消息（前端可立即展示“加载中”）
-        store.appendUserMessage(request.sessionId(), request.content());
+        final String restartId = request.restartFromUserMessageId();
+        final String rawContent = request.content() == null ? "" : request.content();
+        final String userText;
+
+        if (restartId != null && !restartId.isBlank()) {
+            List<StoredMessage> snap = session.historySnapshot();
+            StoredMessage userMsg = snap.stream()
+                    .filter(m -> m.id().equals(restartId))
+                    .findFirst()
+                    .orElse(null);
+            if (userMsg == null || userMsg.role() != ChatRole.USER) {
+                try {
+                    emitter.send(SseEmitter.event()
+                            .data(objectMapper.writeValueAsString(SseEventDto.error("用户消息不存在"))));
+                }
+                catch (IOException ignored) {
+                    // ignore
+                }
+                emitter.complete();
+                return emitter;
+            }
+            String effective = rawContent.strip();
+            if (effective.isEmpty()) {
+                effective = userMsg.content();
+            }
+            userText = effective;
+            store.replaceUserMessageAndTruncateAfter(request.sessionId(), restartId, userText);
+        }
+        else {
+            userText = rawContent.strip();
+            if (userText.isEmpty()) {
+                try {
+                    emitter.send(SseEmitter.event()
+                            .data(objectMapper.writeValueAsString(SseEventDto.error("内容不能为空"))));
+                }
+                catch (IOException ignored) {
+                    // ignore
+                }
+                emitter.complete();
+                return emitter;
+            }
+            store.appendUserMessage(request.sessionId(), userText);
+        }
         var assistantPlaceholder = store.appendAssistantPlaceholder(request.sessionId());
-        maybeAutoTitle(session, request.content());
 
         List<StoredMessage> historyBefore = new ArrayList<>(session.historySnapshot());
-        // 去掉本轮用户消息与助手占位：Prompt 中用户输入由 latestUserText 单独传入
         int n = historyBefore.size();
         if (n >= 2) {
             historyBefore.subList(n - 2, n).clear();
@@ -79,7 +120,7 @@ public class ChatStreamController {
             return emitter;
         }
 
-        Disposable sub = aiStreamService.streamReply(historyBefore, request.content())
+        Disposable sub = aiStreamService.streamReply(historyBefore, userText)
                 .subscribe(chunk -> {
                     if (chunk == null || chunk.isEmpty()) {
                         return;
@@ -103,6 +144,7 @@ public class ChatStreamController {
                     emitter.completeWithError(err);
                 }, () -> {
                     store.updateAssistantContent(request.sessionId(), assistantPlaceholder.id(), full.toString());
+                    maybeUpdateTitleFromConversation(session, userText, full.toString());
                     try {
                         emitter.send(SseEmitter.event()
                                 .data(objectMapper.writeValueAsString(SseEventDto.done())));
@@ -119,20 +161,55 @@ public class ChatStreamController {
         return emitter;
     }
 
-    private void maybeAutoTitle(ChatSession session, String firstUserText) {
-        if (!"新对话".equals(session.title())) {
+    private static boolean isDefaultSessionTitle(String title) {
+        if (title == null) {
+            return true;
+        }
+        String s = title.strip();
+        return s.isEmpty()
+                || "新对话".equals(s)
+                || s.equalsIgnoreCase("new chat")
+                || s.equalsIgnoreCase("new conversation");
+    }
+
+    private static String firstLine(String text, int maxLen) {
+        if (text == null) {
+            return "";
+        }
+        String one = text.strip().replace('\r', ' ').split("\n")[0].strip();
+        if (one.length() > maxLen) {
+            return one.substring(0, maxLen) + "…";
+        }
+        return one;
+    }
+
+    /**
+     * 首轮对话完成后，根据用户问题与助手摘要生成会话标题（避免长期显示「新对话」）。
+     */
+    private void maybeUpdateTitleFromConversation(ChatSession session, String userText, String assistantText) {
+        if (!isDefaultSessionTitle(session.title())) {
             return;
         }
-        List<StoredMessage> msgs = session.messagesView();
-        if (msgs.size() != 2) {
+        String u = firstLine(userText, 20);
+        String a = firstLine(assistantText, 16);
+        String title;
+        if (u.isBlank() && a.isBlank()) {
             return;
         }
-        String t = firstUserText.strip();
-        if (t.length() > 24) {
-            t = t.substring(0, 24) + "…";
+        if (a.isBlank()) {
+            title = u;
         }
-        if (!t.isBlank()) {
-            session.setTitle(t);
+        else if (u.isBlank()) {
+            title = a;
+        }
+        else {
+            title = u + " · " + a;
+            if (title.length() > 40) {
+                title = title.substring(0, 37) + "…";
+            }
+        }
+        if (!title.isBlank()) {
+            session.setTitle(title);
         }
     }
 }

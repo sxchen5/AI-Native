@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { Plus, EditPen, Delete, MoreFilled } from '@element-plus/icons-vue'
+import { Expand, Fold, Plus, EditPen, Delete, MoreFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import type { SessionSummary } from '../api/types'
 import { useChatStore } from '../stores/chat'
+import { useUiStore } from '../stores/ui'
 
 const { t } = useI18n()
 const chat = useChatStore()
+const ui = useUiStore()
 
 function sortedSessions() {
   return [...chat.sessions].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
@@ -15,7 +17,10 @@ function sortedSessions() {
 
 async function onNew() {
   try {
-    await chat.createSession()
+    const created = await chat.createSession()
+    if (created === null) {
+      ElMessage.info(t('session.alreadyEmpty'))
+    }
   } catch (e: unknown) {
     ElMessage.error((e as Error).message || t('errors.createSession'))
   }
@@ -59,9 +64,18 @@ async function onDelete(s: SessionSummary) {
 </script>
 
 <template>
-  <aside class="sidebar">
-    <el-button type="primary" class="new-btn" :icon="Plus" @click="onNew">{{ t('session.new') }}</el-button>
-    <el-scrollbar class="scroll">
+  <aside class="sidebar" :class="{ collapsed: ui.sidebarCollapsed }">
+    <div class="toolbar">
+      <el-tooltip :content="ui.sidebarCollapsed ? t('session.expand') : t('session.collapse')" placement="right">
+        <el-button circle size="small" class="fold-btn" @click="ui.toggleSidebar">
+          <el-icon><Fold v-if="!ui.sidebarCollapsed" /><Expand v-else /></el-icon>
+        </el-button>
+      </el-tooltip>
+      <el-button v-show="!ui.sidebarCollapsed" type="primary" class="new-btn" :icon="Plus" @click="onNew">
+        {{ t('session.new') }}
+      </el-button>
+    </div>
+    <el-scrollbar v-show="!ui.sidebarCollapsed" class="scroll">
       <div v-if="chat.loadingSessions" class="muted pad">{{ t('session.loading') }}</div>
       <div v-else-if="chat.sessions.length === 0" class="muted pad">{{ t('session.empty') }}</div>
       <div v-else class="list">
@@ -96,6 +110,11 @@ async function onDelete(s: SessionSummary) {
         </div>
       </div>
     </el-scrollbar>
+    <div v-show="ui.sidebarCollapsed" class="collapsed-rail">
+      <el-tooltip :content="t('session.new')" placement="right">
+        <el-button type="primary" circle size="small" class="rail-new" :icon="Plus" @click="onNew" />
+      </el-tooltip>
+    </div>
   </aside>
 </template>
 
@@ -106,14 +125,38 @@ async function onDelete(s: SessionSummary) {
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border-subtle);
   transition:
+    width 0.32s cubic-bezier(0.22, 1, 0.36, 1),
     background 0.35s ease,
     border-color 0.35s ease;
+  width: 280px;
+  min-width: 280px;
+  max-width: 280px;
+}
+
+.sidebar.collapsed {
+  width: 56px;
+  min-width: 56px;
+  max-width: 56px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 10px 8px;
+  flex-wrap: wrap;
+}
+
+.fold-btn {
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
 }
 
 .new-btn {
-  margin: 14px 12px 10px;
-  width: calc(100% - 24px);
-  height: 40px;
+  flex: 1;
+  min-width: 0;
+  height: 36px;
   border-radius: var(--radius-md, 10px);
   font-weight: 600;
   box-shadow: var(--shadow-sm);
@@ -122,6 +165,20 @@ async function onDelete(s: SessionSummary) {
 .scroll {
   flex: 1;
   padding: 4px 8px 12px;
+  min-height: 0;
+}
+
+.collapsed-rail {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0 12px;
+  gap: 10px;
+}
+
+.rail-new {
+  box-shadow: var(--shadow-sm);
 }
 
 .list {

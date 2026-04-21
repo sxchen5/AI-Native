@@ -123,7 +123,7 @@ npm run dev
 - `DELETE /api/sessions/{sessionId}`：删除会话
 - `GET /api/sessions/{sessionId}/messages`：消息历史
 - `POST /api/chat/stream`：**SSE**（`Accept: text/event-stream`）  
-  Body：`{ "sessionId": "...", "content": "..." }`  
+  Body：`{ "sessionId": "...", "content": "..." }`；可选 `restartFromUserMessageId`：从该条**用户消息**起截断后续并重新生成（`content` 可传空字符串表示沿用原用户文本；非空则作为编辑后的文本）  
   事件 JSON：
   - `{"type":"start","assistantMessageId":"..."}`
   - `{"type":"delta","text":"..."}`
@@ -132,7 +132,7 @@ npm run dev
 
 ## Spring AI 2.0 关键点（本仓库落地）
 
-- `ChatClient.Builder` / `ChatClient`：`AiClientConfiguration`
+- `ChatClient.Builder` / `ChatClient`：`OpenAiManualConfiguration`
 - `Prompt` + `UserMessage` + `SystemMessage`：`ChatAiStreamService`
 - 流式：`chatClient.prompt(prompt).stream().content()`（Reactor `Flux<String>`）
 - SSE：`SseEmitter` 将增量事件推送给前端

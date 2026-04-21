@@ -79,6 +79,41 @@ public class InMemoryChatStore {
         return message;
     }
 
+    /**
+     * 将指定用户消息替换为新文本，并删除其后的所有消息（编辑后重发）。
+     */
+    public void replaceUserMessageAndTruncateAfter(String sessionId, String userMessageId, String newContent) {
+        ChatSession session = sessions.get(sessionId);
+        if (session == null) {
+            throw new IllegalArgumentException("会话不存在");
+        }
+        List<StoredMessage> snapshot = session.historySnapshot();
+        StoredMessage old = snapshot.stream()
+                .filter(m -> m.id().equals(userMessageId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("消息不存在"));
+        if (old.role() != ChatRole.USER) {
+            throw new IllegalArgumentException("只能替换用户消息");
+        }
+        if (newContent == null || newContent.isBlank()) {
+            throw new IllegalArgumentException("内容不能为空");
+        }
+        session.replaceMessage(userMessageId,
+                new StoredMessage(old.id(), ChatRole.USER, newContent.strip(), old.createdAt()));
+        session.removeMessagesAfter(userMessageId);
+    }
+
+    /**
+     * 删除指定消息之后的所有消息（重新生成时保留该条用户消息）。
+     */
+    public void truncateAfterMessage(String sessionId, String messageId) {
+        ChatSession session = sessions.get(sessionId);
+        if (session == null) {
+            throw new IllegalArgumentException("会话不存在");
+        }
+        session.removeMessagesAfter(messageId);
+    }
+
     public void updateAssistantContent(String sessionId, String messageId, String fullContent) {
         ChatSession session = sessions.get(sessionId);
         if (session == null) {

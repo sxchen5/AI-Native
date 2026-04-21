@@ -10,10 +10,19 @@ function t(key: string) {
   return i18n.global.t(key) as string
 }
 
+function isDefaultSessionTitle(title: string) {
+  const s = title?.trim() ?? ''
+  return (
+    s === '' ||
+    s === t('session.defaultTitle') ||
+    /^new chat$/i.test(s) ||
+    /^new conversation$/i.test(s)
+  )
+}
+
 export const useChatStore = defineStore('chat', () => {
   const sessions = ref<SessionSummary[]>([])
   const activeSessionId = ref<string | null>(null)
-  /** 当前展示的消息列表（与 Pinia 中活动会话同步） */
   const messages = ref<ChatMessage[]>([])
   const loadingSessions = ref(false)
   const loadingMessages = ref(false)
@@ -23,6 +32,13 @@ export const useChatStore = defineStore('chat', () => {
   let abort: AbortController | null = null
 
   const activeSession = computed(() => sessions.value.find((s) => s.id === activeSessionId.value) ?? null)
+
+  /** 当前为「空的新会话」：默认标题且无消息，禁止再点新建 */
+  const isEmptyNewSession = computed(() => {
+    const s = activeSession.value
+    if (!s || !activeSessionId.value) return false
+    return isDefaultSessionTitle(s.title) && messages.value.length === 0
+  })
 
   async function fetchSessions() {
     loadingSessions.value = true
@@ -64,7 +80,14 @@ export const useChatStore = defineStore('chat', () => {
     await fetchMessages(id)
   }
 
-  async function createSession() {
+  /**
+   * 新建会话；若当前已是空的新会话则不再创建。
+   * @returns 新建会话，或 `null` 表示已阻止重复创建
+   */
+  async function createSession(): Promise<SessionSummary | null> {
+    if (isEmptyNewSession.value) {
+      return null
+    }
     const s = await chatApi.createSession(t('session.defaultTitle'))
     sessions.value = [s, ...sessions.value.filter((x) => x.id !== s.id)]
     activeSessionId.value = s.id
@@ -97,14 +120,11 @@ export const useChatStore = defineStore('chat', () => {
     sending.value = false
   }
 
-  /**
-   * 发送消息并流式接收；调用方负责 UI 提示（ElMessage）
-   * onDelta: 每次增量回调，用于打字机
-   */
   async function sendStream(
     sessionId: string,
     content: string,
     opts: {
+      restartFromUserMessageId?: string | null
       onStart: (assistantMessageId: string) => void
       onDelta: (chunk: string) => void
       onDone: () => void
@@ -114,10 +134,15 @@ export const useChatStore = defineStore('chat', () => {
     sending.value = true
     abort = new AbortController()
 
+    const body: Record<string, unknown> = { sessionId, content }
+    if (opts.restartFromUserMessageId) {
+      body.restartFromUserMessageId = opts.restartFromUserMessageId
+    }
+
     try {
       await postSseJsonStream(
         '/api/chat/stream',
-        { sessionId, content },
+        body,
         (evt) => {
           if (evt.type === 'start' && evt.assistantMessageId) {
             opts.onStart(evt.assistantMessageId)
@@ -149,6 +174,7 @@ export const useChatStore = defineStore('chat', () => {
     sending,
     inputDraft,
     activeSession,
+    isEmptyNewSession,
     fetchSessions,
     fetchMessages,
     setActiveSession,

@@ -7,9 +7,11 @@ import AppHeader from './AppHeader.vue'
 import ChatMain from './ChatMain.vue'
 import SessionSidebar from './SessionSidebar.vue'
 import { useChatStore } from '../stores/chat'
+import { useUiStore } from '../stores/ui'
 
 const { t } = useI18n()
 const chat = useChatStore()
+const ui = useUiStore()
 
 onMounted(async () => {
   try {
@@ -26,7 +28,7 @@ onMounted(async () => {
 <template>
   <div class="shell">
     <AppHeader />
-    <div class="body">
+    <div class="body" :class="{ 'sidebar-collapsed': ui.sidebarCollapsed }">
       <SessionSidebar class="sidebar-pane" />
       <ChatMain class="chat-pane" />
     </div>
@@ -45,11 +47,17 @@ onMounted(async () => {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(260px, 300px) 1fr;
+  grid-template-columns: 280px 1fr;
+  transition: grid-template-columns 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.body.sidebar-collapsed {
+  grid-template-columns: 56px 1fr;
 }
 
 @media (max-width: 900px) {
-  .body {
+  .body,
+  .body.sidebar-collapsed {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
   }
@@ -57,6 +65,9 @@ onMounted(async () => {
     max-height: 220px;
     border-right: none;
     border-bottom: 1px solid var(--border-subtle);
+  }
+  .body.sidebar-collapsed .sidebar-pane {
+    max-height: 120px;
   }
 }
 

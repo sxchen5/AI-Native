@@ -70,6 +70,24 @@ public class ChatSession {
         throw new IllegalArgumentException("消息不存在: " + messageId);
     }
 
+    /**
+     * 删除指定消息之后的所有消息（用于重新生成 / 编辑后重发）。
+     */
+    public void removeMessagesAfter(String messageId) {
+        synchronized (messages) {
+            for (int i = 0; i < messages.size(); i++) {
+                if (messages.get(i).id().equals(messageId)) {
+                    if (i + 1 < messages.size()) {
+                        messages.subList(i + 1, messages.size()).clear();
+                    }
+                    touch();
+                    return;
+                }
+            }
+        }
+        throw new IllegalArgumentException("消息不存在: " + messageId);
+    }
+
     public List<StoredMessage> historySnapshot() {
         synchronized (messages) {
             return Collections.unmodifiableList(new ArrayList<>(messages));
