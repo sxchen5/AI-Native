@@ -1,5 +1,8 @@
 package com.example.doubaoai.chatservice.web;
 
+import java.util.Iterator;
+import java.util.Map;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -14,6 +17,7 @@ import com.example.doubaoai.chatservice.domain.StoredMessage;
 import com.example.doubaoai.chatservice.store.InMemoryChatStore;
 import com.example.doubaoai.chatservice.web.dto.MessageDto;
 import com.example.doubaoai.chatservice.web.dto.MessageFeedbackRequest;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -59,18 +63,24 @@ public class MessageFeedbackController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在"));
     }
 
-    private String mergeFeedback(String existingJson, String vote) throws Exception {
-        ObjectNode node;
-        if (existingJson == null || existingJson.isBlank()) {
-            node = objectMapper.createObjectNode();
-        }
-        else {
-            JsonNode parsed = objectMapper.readTree(existingJson);
-            if (parsed instanceof ObjectNode on) {
-                node = on;
+    /**
+     * 将 feedback 写入可变的 JSON 对象；原 metadata 非对象或非法 JSON 时从空对象开始，避免 Jackson 不可变节点或解析异常。
+     */
+    private String mergeFeedback(String existingJson, String vote) {
+        ObjectNode node = objectMapper.createObjectNode();
+        if (existingJson != null && !existingJson.isBlank()) {
+            try {
+                JsonNode root = objectMapper.readTree(existingJson);
+                if (root.isObject()) {
+                    Iterator<Map.Entry<String, JsonNode>> it = root.fields();
+                    while (it.hasNext()) {
+                        Map.Entry<String, JsonNode> e = it.next();
+                        node.set(e.getKey(), e.getValue().deepCopy());
+                    }
+                }
             }
-            else {
-                node = objectMapper.createObjectNode();
+            catch (JsonProcessingException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "消息元数据格式无效", e);
             }
         }
         if ("clear".equals(vote)) {
@@ -79,6 +89,11 @@ public class MessageFeedbackController {
         else {
             node.put("feedback", vote);
         }
-        return objectMapper.writeValueAsString(node);
+        try {
+            return objectMapper.writeValueAsString(node);
+        }
+        catch (JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
     }
 }
