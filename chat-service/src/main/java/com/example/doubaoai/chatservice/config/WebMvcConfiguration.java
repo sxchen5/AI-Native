@@ -20,7 +20,7 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
                         "http://127.0.0.1:4173")
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
-                .exposedHeaders("Cache-Control", "Content-Type")
+                .exposedHeaders("Cache-Control", "Content-Type", "X-Captcha-Id")
                 .allowCredentials(true);
     }
 }

@@ -87,6 +87,7 @@ export async function postSseJsonStream(
         },
         body: JSON.stringify(body),
         signal,
+        credentials: 'include',
       })
 
       if (!res.ok) {

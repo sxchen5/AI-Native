@@ -4,7 +4,7 @@
 
 ## 技术栈
 
-- **后端**：Spring Boot `3.3.6`、Spring Cloud `2024.0.3`、Spring Cloud Alibaba `2023.0.3.4`（Nacos）、Spring AI `2.0.0-M4`（OpenAI Java SDK 集成路径）、Java `17+`
+- **后端**：Spring Boot `3.3.6`、Spring Cloud `2024.0.3`、Spring Cloud Alibaba `2023.0.3.4`（Nacos）、Spring AI `2.0.0-M4`（OpenAI Java SDK 集成路径）、**Spring Security（Session + 图片验证码登录）**、Java `17+`
 - **前端**：Vue `3` + Vite、Element Plus、Pinia、Vue I18n（中/英）、主题深/浅切换、Axios + `fetch` SSE 流式、`marked` + `highlight.js` AI 消息渲染
 - **AI 协议**：OpenAI 官方 Java SDK（`openai-java`）+ Spring AI `OpenAiSdkChatModel` + `ChatClient`（OpenAI 兼容 HTTP 协议，可切换对接 **OpenAI / 通义千问兼容模式 / 百度千帆 OpenAI 兼容**）
 
@@ -115,9 +115,22 @@ npm run dev
 
 开发环境默认 `http://127.0.0.1:5173`，并通过 `vite.config.ts` 将 `/api` 代理到网关 `8080`。
 
+前端与 SSE 请求均携带 **Cookie（`withCredentials` / `credentials: include`）** 以维持登录 Session。
+
+## 5.1）登录与演示账号
+
+- 打开前端后先进入登录页：用户名、密码、**图片验证码**（`GET /api/auth/captcha`，响应头 `X-Captcha-Id`）。
+- 登录成功后可使用聊天；顶栏可 **退出登录**。
+- 演示账号在 `chat-service/src/main/resources/application.yml` 的 **`app.auth.users`** 中配置（可配置多条），例如默认：`demo / demo123`、`admin / admin123`。
+- 未登录访问 `/api/**`（除认证接口外）将返回 **401 JSON**：`{"message":"未登录或会话已过期"}`。
+
 ## 接口说明（经网关访问：前缀 `/api`）
 
-- `GET /api/sessions`：会话列表
+- `GET /api/auth/captcha`：PNG 验证码图片（响应头 **`X-Captcha-Id`**，前端需保存并在登录时回传）
+- `POST /api/auth/login`：登录（Body：`username`、`password`、`captchaId`、`captchaCode`），建立 Session
+- `POST /api/auth/logout`：退出
+- `GET /api/auth/me`：是否已登录及用户名（无需登录也可调用）
+- `GET /api/sessions`：会话列表（需登录）
 - `POST /api/sessions`：新建会话（Body：`{ "title": "可选" }`）
 - `PATCH /api/sessions/{sessionId}`：重命名（Body：`{ "title": "新标题" }`）
 - `DELETE /api/sessions/{sessionId}`：删除会话

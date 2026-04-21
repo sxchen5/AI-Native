@@ -1,9 +1,24 @@
 {
+  "login": {
+    "title": "Sign in",
+    "subtitle": "Sign in to use AI chat",
+    "username": "Username",
+    "password": "Password",
+    "captcha": "Captcha",
+    "captchaPlaceholder": "Characters in the image",
+    "clickRefresh": "Click the image to refresh",
+    "submit": "Sign in",
+    "success": "Signed in",
+    "failed": "Sign in failed",
+    "fillAll": "Please enter username and password",
+    "captchaRequired": "Please enter the captcha"
+  },
   "app": {
     "name": "Doubao-style Assistant",
     "tagline": "Spring AI · Streaming chat"
   },
   "header": {
+    "logout": "Sign out",
     "langZh": "中文",
     "langEn": "English",
     "themeLight": "Light",

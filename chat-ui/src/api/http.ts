@@ -6,6 +6,7 @@ import axios from 'axios'
 export const http = axios.create({
   baseURL: '',
   timeout: 60_000,
+  withCredentials: true,
 })
 
 http.interceptors.response.use(

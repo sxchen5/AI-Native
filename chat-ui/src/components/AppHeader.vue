@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ChatDotRound, Moon, Sunny, RefreshRight } from '@element-plus/icons-vue'
+import { ChatDotRound, Moon, Sunny, RefreshRight, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import { useChatStore } from '../stores/chat'
+import { useAuthStore } from '../stores/auth'
 import { useLocaleStore } from '../stores/locale'
 import { useThemeStore } from '../stores/theme'
 
@@ -11,6 +12,7 @@ const { t } = useI18n()
 const theme = useThemeStore()
 const locale = useLocaleStore()
 const chat = useChatStore()
+const auth = useAuthStore()
 
 async function onRefresh() {
   try {
@@ -18,6 +20,15 @@ async function onRefresh() {
     if (chat.activeSessionId) await chat.fetchMessages(chat.activeSessionId)
   } catch (e: unknown) {
     ElMessage.error((e as Error).message || t('errors.loadSessions'))
+  }
+}
+
+async function onLogout() {
+  try {
+    await auth.logout()
+    ElMessage.success(t('header.logout'))
+  } catch {
+    await auth.refreshMe()
   }
 }
 </script>
@@ -59,6 +70,10 @@ async function onRefresh() {
           <el-icon v-else><Moon /></el-icon>
         </el-button>
       </el-tooltip>
+      <el-button text class="logout-btn" @click="onLogout">
+        <el-icon><SwitchButton /></el-icon>
+        {{ t('header.logout') }}
+      </el-button>
     </div>
   </header>
 </template>
@@ -140,5 +155,10 @@ async function onRefresh() {
 }
 .theme-btn:hover {
   transform: scale(1.04);
+}
+
+.logout-btn {
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 </style>

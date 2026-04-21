@@ -256,7 +256,7 @@ function applyCanvas() {
               </div>
             </div>
 
-            <div v-else class="bubble ai">
+            <div v-else class="ai-content">
               <div v-if="m.content.length === 0 && chat.sending" class="typing">
                 <el-icon class="spin"><Loading /></el-icon>
                 <span class="dot" /><span class="dot" /><span class="dot" />
@@ -351,7 +351,7 @@ function applyCanvas() {
   grid-template-rows: 1fr auto;
   min-width: 0;
   min-height: 0;
-  background: var(--bg-app);
+  background: var(--bg-chat-panel);
   transition: background 0.35s ease;
 }
 
@@ -418,16 +418,16 @@ function applyCanvas() {
   width: 100%;
 }
 .user-input :deep(.el-textarea__inner) {
-  border-radius: 16px 16px 4px 16px;
-  background: var(--bg-bubble-user);
-  color: #fff;
-  border: none;
-  box-shadow: var(--shadow-sm);
+  border-radius: 12px;
+  background: var(--bg-input-fill) !important;
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  box-shadow: none;
   font-size: 14px;
   line-height: 1.55;
 }
 .user-input :deep(.el-textarea__inner::placeholder) {
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--text-muted);
 }
 .user-actions {
   display: flex;
@@ -442,15 +442,12 @@ function applyCanvas() {
   color: var(--accent);
 }
 
-.bubble.ai {
-  padding: 12px 14px;
-  line-height: 1.55;
+.ai-content {
+  width: 100%;
+  padding: 4px 0 0;
+  line-height: 1.6;
   font-size: 14px;
-  border-radius: 16px 16px 16px 4px;
-  background: var(--bg-bubble-ai);
   color: var(--text-primary);
-  border: 1px solid var(--border-subtle);
-  box-shadow: var(--shadow-sm);
 }
 
 .ai-toolbar {
@@ -520,7 +517,7 @@ function applyCanvas() {
 
 .composer {
   border-top: 1px solid var(--border-subtle);
-  background: var(--bg-elevated);
+  background: var(--bg-chat-panel);
   padding: 12px 16px 14px;
   box-shadow: 0 -4px 24px rgba(15, 23, 42, 0.06);
   transition:
@@ -538,6 +535,8 @@ function applyCanvas() {
   border-radius: var(--radius-lg, 14px);
   padding: 12px 52px 12px 14px;
   min-height: 88px !important;
+  background: var(--bg-input-fill) !important;
+  border: 1px solid var(--border-subtle);
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 

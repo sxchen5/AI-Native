@@ -1,9 +1,24 @@
 {
+  "login": {
+    "title": "登录",
+    "subtitle": "登录后即可使用 AI 聊天",
+    "username": "用户名",
+    "password": "密码",
+    "captcha": "图片验证码",
+    "captchaPlaceholder": "请输入图中字符",
+    "clickRefresh": "点击图片可刷新验证码",
+    "submit": "登录",
+    "success": "登录成功",
+    "failed": "登录失败",
+    "fillAll": "请填写用户名和密码",
+    "captchaRequired": "请填写验证码"
+  },
   "app": {
     "name": "豆包风格助手",
     "tagline": "Spring AI · 流式对话"
   },
   "header": {
+    "logout": "退出登录",
     "langZh": "中文",
     "langEn": "English",
     "themeLight": "浅色",
