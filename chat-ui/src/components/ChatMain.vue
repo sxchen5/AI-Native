@@ -11,8 +11,9 @@ import {
   Top,
   Bottom,
 } from '@element-plus/icons-vue'
+import { Fold, FullScreen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -21,7 +22,7 @@ import { useChatStore } from '../stores/chat'
 import { renderAiMarkdown } from '../utils/markdown'
 import { markdownToPlainText } from '../utils/plainText'
 
-const { t } = useI18n()
+const { t, tm } = useI18n()
 const router = useRouter()
 const chat = useChatStore()
 
@@ -247,10 +248,49 @@ function speakAssistant(text: string) {
 function openCanvasPage(msg: ChatMessage) {
   void router.push({ name: 'canvas', query: { messageId: msg.id } })
 }
+
+const suggestionChips = computed(() => {
+  const raw = tm('chat.suggestions') as unknown
+  return Array.isArray(raw) ? (raw as string[]) : []
+})
+
+const showLanding = computed(
+  () =>
+    chat.activeSessionId &&
+    !chat.loadingMessages &&
+    !chat.sending &&
+    chat.messages.length === 0 &&
+    !props.hideThreadHead,
+)
+
+function fillSuggestion(text: string) {
+  chat.inputDraft = text
+}
+
+function goFullChat() {
+  void router.push({ name: 'chat' })
+}
 </script>
 
 <template>
   <main class="main" :class="{ 'main--embedded': props.hideThreadHead }">
+    <div v-if="props.hideThreadHead && chat.activeSessionId" class="embed-bar">
+      <el-tooltip :content="t('chat.fullChatView')" placement="bottom">
+        <el-button text circle size="small" class="embed-fold" @click="goFullChat">
+          <el-icon><Fold /></el-icon>
+        </el-button>
+      </el-tooltip>
+      <div class="embed-bar-center">
+        <span class="embed-title">{{ chat.activeSession?.title || t('session.defaultTitle') }}</span>
+        <span class="embed-sub">{{ t('chat.landDisclaimer') }}</span>
+      </div>
+      <el-tooltip :content="t('chat.fullChatView')" placement="bottom">
+        <el-button text circle size="small" @click="goFullChat">
+          <el-icon><FullScreen /></el-icon>
+        </el-button>
+      </el-tooltip>
+    </div>
+
     <header v-if="chat.activeSessionId && !props.hideThreadHead" class="thread-head">
       <div class="thread-head-inner">
         <h1 class="thread-title">{{ chat.activeSession?.title || t('session.defaultTitle') }}</h1>
@@ -264,6 +304,24 @@ function openCanvasPage(msg: ChatMessage) {
         <p>{{ t('chat.emptyHint') }}</p>
       </div>
       <div v-else-if="chat.loadingMessages" class="muted center">{{ t('chat.loadingMessages') }}</div>
+      <div v-else-if="showLanding" class="landing">
+        <h2 class="land-greeting">{{ t('chat.landGreeting') }}</h2>
+        <p class="land-disclaimer">{{ t('chat.landDisclaimer') }}</p>
+        <div class="suggestion-grid">
+          <button
+            v-for="(chip, i) in suggestionChips"
+            :key="i"
+            type="button"
+            class="suggestion-chip"
+            @click="fillSuggestion(chip)"
+          >
+            {{ chip }}
+          </button>
+        </div>
+      </div>
+      <div v-else-if="props.hideThreadHead && chat.messages.length === 0" class="embed-empty muted">
+        {{ t('chat.embedEmptyHint') }}
+      </div>
       <div v-else class="msg-inner">
         <div
           v-for="(m, idx) in chat.messages"
@@ -374,6 +432,17 @@ function openCanvasPage(msg: ChatMessage) {
     </div>
 
     <footer class="composer">
+      <div v-if="chat.activeSessionId" class="quick-row">
+        <button type="button" class="quick-pill" @click="fillSuggestion(t('chat.quickTone') + '：更专业')">
+          {{ t('chat.quickTone') }}
+        </button>
+        <button type="button" class="quick-pill" @click="fillSuggestion(t('chat.quickLength') + '：精简一半')">
+          {{ t('chat.quickLength') }}
+        </button>
+        <button type="button" class="quick-pill" @click="fillSuggestion(t('chat.quickPolish'))">
+          {{ t('chat.quickPolish') }}
+        </button>
+      </div>
       <div class="composer-inner">
         <el-input
           v-model="chat.inputDraft"
@@ -412,8 +481,133 @@ function openCanvasPage(msg: ChatMessage) {
   transition: background 0.35s ease;
 }
 
-.main.main--embedded {
-  grid-template-rows: 1fr auto;
+.embed-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-chat-panel);
+  flex-shrink: 0;
+}
+
+.embed-bar-center {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.embed-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.embed-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.embed-fold {
+  color: var(--text-secondary);
+}
+
+.landing {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 20px 24px;
+  gap: 10px;
+  min-height: min(52vh, 420px);
+}
+
+.land-greeting {
+  margin: 0;
+  font-size: clamp(22px, 3.2vw, 28px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+}
+
+.land-disclaimer {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.suggestion-grid {
+  margin-top: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  max-width: 640px;
+}
+
+.suggestion-chip {
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-input-fill);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.suggestion-chip:hover {
+  border-color: var(--accent-soft);
+  box-shadow: 0 4px 16px rgba(59, 108, 255, 0.12);
+}
+
+.embed-empty {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  padding: 24px 16px;
+  max-width: 320px;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+.quick-row {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 0 16px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quick-pill {
+  border: 1px solid var(--border-subtle);
+  background: #fff;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.quick-pill:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .thread-head {

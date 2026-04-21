@@ -24,10 +24,18 @@
   },
   "canvas": {
     "title": "Canvas",
-    "backToChat": "Chat only",
+    "backToChat": "Back to chat",
     "preview": "Preview",
     "markdown": "Markdown",
-    "noMessage": "No message to edit. Open canvas again from a reply."
+    "noMessage": "No message to edit. Open canvas again from a reply.",
+    "untitledDoc": "Untitled",
+    "lastModified": "Last modified",
+    "outline": "Outline",
+    "noHeadings": "Use ## headings in the doc to build this outline",
+    "toggleToc": "Toggle outline",
+    "copy": "Copy all",
+    "download": "Download Markdown",
+    "close": "Close canvas"
   },
   "header": {
     "logout": "Sign out",
@@ -60,6 +68,21 @@
     "expand": "Expand sidebar"
   },
   "chat": {
+    "landGreeting": "What can I help you with?",
+    "landDisclaimer": "AI-generated content — please verify.",
+    "suggestions": [
+      "What is an AI agent?",
+      "Latest trends in Java backend?",
+      "Spring Boot health check endpoint example",
+      "How do I convert Markdown to PDF?",
+      "SSE vs WebSocket — differences",
+      "Help me draft a weekly report template"
+    ],
+    "quickTone": "Change tone",
+    "quickLength": "Adjust length",
+    "quickPolish": "Polish text",
+    "fullChatView": "Full-screen chat",
+    "embedEmptyHint": "No messages in this session. Edit the document on the right or return to full chat.",
     "emptyTitle": "Start a conversation",
     "emptyHint": "Create or pick a chat on the left, then type below. Streaming typewriter output is supported.",
     "selectSession": "Select a conversation",

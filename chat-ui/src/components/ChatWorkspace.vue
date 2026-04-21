@@ -1,12 +1,12 @@
 <script setup lang="ts">
+import { ElMessage } from 'element-plus'
 import { onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 defineProps<{
   /** 画布分屏内嵌：收紧聊天区顶栏 */
   compact?: boolean
 }>()
-import { ElMessage } from 'element-plus'
-import { useI18n } from 'vue-i18n'
 
 import ChatMain from './ChatMain.vue'
 import SessionSidebar from './SessionSidebar.vue'
