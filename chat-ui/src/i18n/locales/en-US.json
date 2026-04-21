@@ -1,0 +1,50 @@
+{
+  "app": {
+    "name": "Doubao-style Assistant",
+    "tagline": "Spring AI · Streaming chat"
+  },
+  "header": {
+    "langZh": "中文",
+    "langEn": "English",
+    "themeLight": "Light",
+    "themeDark": "Dark"
+  },
+  "session": {
+    "new": "New chat",
+    "defaultTitle": "New chat",
+    "empty": "No conversations yet. Click above to create one.",
+    "loading": "Loading…",
+    "rename": "Rename",
+    "delete": "Delete",
+    "renameTitle": "Rename conversation",
+    "renamePlaceholder": "Enter a new title",
+    "save": "Save",
+    "cancel": "Cancel",
+    "deleteTitle": "Delete conversation",
+    "deleteConfirm": "Delete conversation “{title}”?",
+    "confirmDelete": "Delete",
+    "titleRequired": "Title is required",
+    "sendingWarn": "A reply is being generated. Please wait or stop first.",
+    "copy": "Copy reply",
+    "copied": "Copied",
+    "copyFail": "Copy failed"
+  },
+  "chat": {
+    "emptyTitle": "Start a conversation",
+    "emptyHint": "Create or pick a chat on the left, then type below. Streaming typewriter output is supported.",
+    "selectSession": "Select a conversation",
+    "loadingMessages": "Loading messages…",
+    "inputPlaceholder": "Message… Enter to send, Shift+Enter for newline",
+    "send": "Send",
+    "stop": "Stop",
+    "refresh": "Refresh",
+    "assistant": "Assistant"
+  },
+  "errors": {
+    "loadSessions": "Failed to load conversations",
+    "loadMessages": "Failed to load messages",
+    "createSession": "Failed to create conversation",
+    "send": "Send failed",
+    "stopped": "Generation stopped"
+  }
+}

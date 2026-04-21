@@ -1,5 +1,16 @@
 import type { SseEnvelope } from '../api/types'
 
+export type SseStreamOptions = {
+  signal?: AbortSignal
+  /** 首次请求失败后的重试次数（不含首次） */
+  maxRetries?: number
+  retryDelayMs?: number
+}
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
 function parseSseBlock(block: string): string | null {
   const lines = block.replace(/\r\n/g, '\n').split('\n')
   const dataParts: string[] = []
@@ -9,40 +20,17 @@ function parseSseBlock(block: string): string | null {
     if (line.startsWith('data:')) {
       dataParts.push(line.replace(/^data:\s?/, ''))
     }
-    // 忽略 event:/id:/retry: 等字段，本项目服务端仅使用默认 message 事件
   }
   if (dataParts.length === 0) return null
   return dataParts.join('\n')
 }
 
-/**
- * 通过 fetch 以 POST 方式消费 text/event-stream，并将每条 data JSON 解析为业务事件。
- * 说明：浏览器原生 EventSource 仅支持 GET，因此流式对话使用 fetch + ReadableStream。
- */
-export async function postSseJsonStream(
-  path: string,
-  body: unknown,
+async function readSseBody(
+  res: Response,
   onEvent: (evt: SseEnvelope) => void,
-  opts?: { signal?: AbortSignal },
+  signal?: AbortSignal,
 ): Promise<void> {
-  const res = await fetch(path, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-    },
-    body: JSON.stringify(body),
-    signal: opts?.signal,
-  })
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(text || `HTTP ${res.status}`)
-  }
-  if (!res.body) {
-    throw new Error('响应体不可读（缺少 body）')
-  }
-
+  if (!res.body) throw new Error('SSE: response body is not readable')
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
@@ -55,25 +43,69 @@ export async function postSseJsonStream(
   }
 
   while (true) {
+    if (signal?.aborted) {
+      reader.cancel().catch(() => {})
+      throw new DOMException('Aborted', 'AbortError')
+    }
     const { done, value } = await reader.read()
     if (done) break
     buffer += decoder.decode(value, { stream: true })
-
-    // Spring 的 SseEmitter 通常以 "\n\n" 分隔事件；为兼容性也支持 "\r\n\r\n"
     buffer = buffer.replace(/\r\n/g, '\n')
-
-    while (true) {
-      const idx = buffer.indexOf('\n\n')
-      if (idx < 0) break
+    let idx: number
+    while ((idx = buffer.indexOf('\n\n')) >= 0) {
       const rawEvent = buffer.slice(0, idx)
       buffer = buffer.slice(idx + 2)
       flushEventBlock(rawEvent)
     }
   }
-
-  // 处理末尾未以空行结束的情况
   const tail = buffer.trim()
-  if (tail.length > 0) {
-    flushEventBlock(tail)
+  if (tail.length > 0) flushEventBlock(tail)
+}
+
+/**
+ * POST + SSE：解析 `data:` JSON 事件；支持失败重试与 AbortSignal。
+ */
+export async function postSseJsonStream(
+  path: string,
+  body: unknown,
+  onEvent: (evt: SseEnvelope) => void,
+  opts?: SseStreamOptions,
+): Promise<void> {
+  const maxRetries = opts?.maxRetries ?? 0
+  const retryDelayMs = opts?.retryDelayMs ?? 600
+  const signal = opts?.signal
+
+  let attempt = 0
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
+        body: JSON.stringify(body),
+        signal,
+      })
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        const err = new Error(text || `HTTP ${res.status}`)
+        ;(err as any).status = res.status
+        throw err
+      }
+
+      await readSseBody(res, onEvent, signal)
+      return
+    } catch (e) {
+      if (signal?.aborted) throw e
+      const isLast = attempt >= maxRetries
+      const status = (e as any)?.status
+      const retryable = status == null || status >= 500 || status === 429
+      if (!retryable || isLast) throw e
+      attempt += 1
+      await sleep(retryDelayMs * attempt)
+    }
   }
 }
