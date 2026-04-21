@@ -446,7 +446,7 @@ html.dark .new-chat-pill {
 .hist-head {
   font-size: 12px;
   color: var(--text-muted);
-  margin: 0 2px 6px;
+  margin: 10px 2px 6px;
   flex-shrink: 0;
 }
 

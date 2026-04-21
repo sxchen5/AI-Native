@@ -52,6 +52,8 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const uploadBusy = ref(false)
 const followUpQuestions = ref<string[]>([])
 const docConvertBusyId = ref<string | null>(null)
+/** 最后一条助手消息：SSE 结束且打字机/刷新完成后才为 true，用于延迟工具栏与猜你想问 */
+const assistantOutputSettled = ref(true)
 const pendingAttachments = ref<AttachmentChip[]>([])
 const voiceRecording = ref(false)
 /** 开始本次语音时输入框已有内容，识别结果追加在其后并随 interim 整体替换 */
@@ -82,6 +84,7 @@ function showUserToolbar(idx: number, m: ChatMessage) {
 function showAiToolbar(idx: number, m: ChatMessage) {
   if (m.role !== 'ASSISTANT') return false
   if (isAssistantStreaming(m)) return false
+  if (isLastMessage(idx) && !assistantOutputSettled.value) return false
   return isLastMessage(idx) || !!hoveringRow[m.id]
 }
 
@@ -89,7 +92,7 @@ function showInlineFollowUps(idx: number, m: ChatMessage) {
   if (props.hideThreadHead) return false
   if (!chat.activeSessionId || chat.loadingMessages || showLanding.value) return false
   if (m.role !== 'ASSISTANT' || docMeta(m)) return false
-  if (!isLastMessage(idx) || chat.sending) return false
+  if (!isLastMessage(idx) || chat.sending || !assistantOutputSettled.value) return false
   return followUpQuestions.value.length > 0
 }
 
@@ -152,6 +155,7 @@ watch(
   () => {
     editingUserId.value = null
     followUpQuestions.value = []
+    assistantOutputSettled.value = true
     void scrollToBottom(false)
     void nextTick(() => updateScrollBottomState())
   },
@@ -317,6 +321,7 @@ function runStream(
   afterDone?: () => void,
 ) {
   const sid = chat.activeSessionId!
+  assistantOutputSettled.value = false
   let assistantId = ''
   /** 已收到的全文（SSE），打字机从该缓冲逐字显示到气泡 */
   let streamBuffer = ''
@@ -411,6 +416,11 @@ function runStream(
         ElMessage.error((e as Error).message || t('errors.send'))
       }
       return chat.fetchMessages(sid)
+    })
+    .finally(() => {
+      void nextTick(() => {
+        assistantOutputSettled.value = true
+      })
     })
 }
 
@@ -667,9 +677,20 @@ function askFollowUp(q: string) {
       :class="{ 'msg-scroll--jump': showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding }"
       @scroll.passive="onMsgScroll"
     >
-      <div v-if="!chat.activeSessionId" class="empty empty--draft">
-        <h2>{{ t('chat.draftTitle') }}</h2>
-        <p>{{ t('chat.draftHint') }}</p>
+      <div v-if="!chat.activeSessionId" class="landing">
+        <h2 class="land-greeting">{{ t('chat.landGreeting') }}</h2>
+        <p class="land-disclaimer">{{ t('chat.landDisclaimer') }}</p>
+        <div class="suggestion-grid">
+          <button
+            v-for="(chip, i) in suggestionChips"
+            :key="i"
+            type="button"
+            class="suggestion-chip"
+            @click="fillSuggestion(chip)"
+          >
+            {{ chip }}
+          </button>
+        </div>
       </div>
       <div v-else-if="chat.loadingMessages" class="muted center">{{ t('chat.loadingMessages') }}</div>
       <div v-else-if="showLanding" class="landing">
