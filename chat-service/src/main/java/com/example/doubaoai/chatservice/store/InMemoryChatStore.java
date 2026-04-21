@@ -34,7 +34,8 @@ public class InMemoryChatStore {
 
     public List<ChatSession> listSessions() {
         List<ChatSession> list = new ArrayList<>(sessions.values());
-        list.sort(Comparator.comparing(ChatSession::updatedAt).reversed());
+        list.sort(Comparator.comparing(ChatSession::updatedAt).reversed()
+                .thenComparing(ChatSession::id));
         return list;
     }
 

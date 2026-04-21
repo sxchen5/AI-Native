@@ -1,7 +1,6 @@
 package com.example.doubaoai.chatservice.web;
 
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 import org.springframework.http.HttpStatus;
@@ -15,6 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.example.doubaoai.chatservice.domain.ChatRole;
 import com.example.doubaoai.chatservice.domain.StoredMessage;
+import com.example.doubaoai.chatservice.service.ChatTitleAiService;
 import com.example.doubaoai.chatservice.store.InMemoryChatStore;
 import com.example.doubaoai.chatservice.web.dto.ConvertDocumentRequest;
 import com.example.doubaoai.chatservice.web.dto.FreezeDocumentRequest;
@@ -25,7 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 
 /**
- * 将助手消息转为可持久化的「文档卡片」消息。
+ * 将助手消息转为可持久化的「文档卡片」消息（原地更新同一条消息）。
  */
 @RestController
 @RequestMapping("/api/chat/document")
@@ -34,10 +34,12 @@ public class ChatDocumentController {
 
     private final InMemoryChatStore store;
     private final ObjectMapper objectMapper;
+    private final ChatTitleAiService titleAiService;
 
-    public ChatDocumentController(InMemoryChatStore store, ObjectMapper objectMapper) {
+    public ChatDocumentController(InMemoryChatStore store, ObjectMapper objectMapper, ChatTitleAiService titleAiService) {
         this.store = store;
         this.objectMapper = objectMapper;
+        this.titleAiService = titleAiService;
     }
 
     @PostMapping("/convert")
@@ -53,10 +55,10 @@ public class ChatDocumentController {
                             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "只能转换助手消息");
                         }
                         String body = src.content() == null ? "" : src.content();
-                        store.appendAssistantMessage(req.sessionId(),
-                                "好的，让我把消息转为文档。\n\n文档已就绪，你可以直接编辑，或告诉我如何修改。",
-                                null);
-                        String title = firstLineTitle(body);
+                        String title = titleAiService.summarizeDocumentTitle(body);
+                        if (title.isBlank()) {
+                            title = firstLineTitle(body);
+                        }
                         Map<String, Object> meta = new LinkedHashMap<>();
                         meta.put("type", "document_card");
                         meta.put("title", title);
@@ -64,8 +66,12 @@ public class ChatDocumentController {
                         meta.put("sourceAssistantId", src.id());
                         meta.put("frozen", Boolean.FALSE);
                         String metaJson = writeMeta(meta);
-                        StoredMessage doc = store.appendAssistantMessage(req.sessionId(), body, metaJson);
-                        return ResponseEntity.ok(toDto(doc));
+                        store.updateMessageContentAndMetadata(req.sessionId(), src.id(), body, metaJson);
+                        StoredMessage updated = session.historySnapshot().stream()
+                                .filter(m -> m.id().equals(src.id()))
+                                .findFirst()
+                                .orElseThrow();
+                        return ResponseEntity.ok(toDto(updated));
                     })
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在"));
         }
@@ -94,7 +100,8 @@ public class ChatDocumentController {
                             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "不是文档消息");
                         }
                         meta.put("markdownBody", req.markdownBody());
-                        meta.put("title", firstLineTitle(req.markdownBody()));
+                        String aiTitle = titleAiService.summarizeDocumentTitle(req.markdownBody());
+                        meta.put("title", aiTitle.isBlank() ? firstLineTitle(req.markdownBody()) : aiTitle);
                         String metaJson = writeMeta(meta);
                         store.updateMessageContentAndMetadata(req.sessionId(), req.messageId(), req.markdownBody(), metaJson);
                         StoredMessage updated = session.historySnapshot().stream()

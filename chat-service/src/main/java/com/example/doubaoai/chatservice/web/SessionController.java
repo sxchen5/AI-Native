@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.doubaoai.chatservice.domain.ChatSession;
@@ -18,6 +19,7 @@ import com.example.doubaoai.chatservice.store.InMemoryChatStore;
 import com.example.doubaoai.chatservice.web.dto.CreateSessionRequest;
 import com.example.doubaoai.chatservice.web.dto.MessageDto;
 import com.example.doubaoai.chatservice.web.dto.RenameSessionRequest;
+import com.example.doubaoai.chatservice.web.dto.SessionListResponse;
 import com.example.doubaoai.chatservice.web.dto.SessionSummaryDto;
 
 import jakarta.validation.Valid;
@@ -36,11 +38,25 @@ public class SessionController {
         this.store = store;
     }
 
+    /**
+     * 分页列表：按更新时间倒序；offset 0 为最新。limit 最大 30。
+     */
     @GetMapping
-    public List<SessionSummaryDto> list() {
-        return store.listSessions().stream()
+    public SessionListResponse list(
+            @RequestParam(name = "offset", defaultValue = "0") int offset,
+            @RequestParam(name = "limit", defaultValue = "30") int limit) {
+        int lim = Math.min(30, Math.max(1, limit));
+        int off = Math.max(0, offset);
+        List<ChatSession> all = store.listSessions();
+        if (off >= all.size()) {
+            return new SessionListResponse(List.of(), false);
+        }
+        int end = Math.min(off + lim, all.size());
+        List<SessionSummaryDto> slice = all.subList(off, end).stream()
                 .map(s -> new SessionSummaryDto(s.id(), s.title(), s.createdAt(), s.updatedAt()))
                 .toList();
+        boolean hasMore = end < all.size();
+        return new SessionListResponse(slice, hasMore);
     }
 
     @PostMapping

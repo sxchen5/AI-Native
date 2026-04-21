@@ -48,6 +48,8 @@
   },
   "session": {
     "new": "New chat",
+    "historyTitle": "History",
+    "loadingMore": "Loading more…",
     "defaultTitle": "New chat",
     "empty": "No conversations yet. Click above to create one.",
     "loading": "Loading…",

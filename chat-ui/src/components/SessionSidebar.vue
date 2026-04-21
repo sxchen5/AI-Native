@@ -3,7 +3,6 @@ import * as Icons from '@element-plus/icons-vue'
 import {
   Expand,
   Fold,
-  Plus,
   EditPen,
   Delete,
   MoreFilled,
@@ -13,11 +12,12 @@ import {
   Sunny,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { SessionSummary } from '../api/types'
 import IconAiAvatar from './icons/IconAiAvatar.vue'
+import IconSessionBubble from './icons/IconSessionBubble.vue'
 import { useAuthStore } from '../stores/auth'
 import { useChatStore } from '../stores/chat'
 import { useLocaleStore, type AppLocale } from '../stores/locale'
@@ -33,6 +33,8 @@ const locale = useLocaleStore()
 const theme = useThemeStore()
 const profile = useProfileStore()
 
+const histScrollEl = ref<HTMLElement | null>(null)
+
 const userAvatarIcon = computed(() => resolvePresetIcon(profile.currentAvatar.iconName))
 
 function resolvePresetIcon(name: string) {
@@ -40,13 +42,11 @@ function resolvePresetIcon(name: string) {
   return (comp as typeof Icons.UserFilled) || Icons.UserFilled
 }
 
-function sortedSessions() {
-  return [...chat.sessions].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-}
-
 async function onNew() {
   try {
     await chat.createSession()
+    await nextTick()
+    histScrollEl.value?.scrollTo({ top: 0, behavior: 'smooth' })
   } catch (e: unknown) {
     ElMessage.error((e as Error).message || t('errors.createSession'))
   }
@@ -88,6 +88,36 @@ async function onDelete(s: SessionSummary) {
   }
 }
 
+async function onHistScroll() {
+  const el = histScrollEl.value
+  if (!el || chat.loadingMoreSessions || !chat.sessionsHasMore) return
+  el.classList.add('u-scroll--active')
+  const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 72
+  if (nearBottom) {
+    try {
+      await chat.loadMoreSessions()
+    } catch (e: unknown) {
+      ElMessage.error((e as Error).message || t('errors.loadSessions'))
+    }
+  }
+}
+
+function onWinKey(e: KeyboardEvent) {
+  if (!e.ctrlKey || e.metaKey) return
+  if (e.key !== 'k' && e.key !== 'K') return
+  if (ui.sidebarCollapsedEffective) return
+  e.preventDefault()
+  void onNew()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onWinKey)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onWinKey)
+})
+
 async function onLogout() {
   try {
     await auth.logout()
@@ -100,7 +130,6 @@ async function onLogout() {
 
 <template>
   <aside class="sidebar" :class="{ collapsed: ui.sidebarCollapsedEffective }">
-    <!-- 顶部：品牌 + 收起在会话列表右上方 -->
     <div class="sidebar-top">
       <div class="brand" v-show="!ui.sidebarCollapsedEffective">
         <div class="logo" aria-hidden="true">
@@ -115,7 +144,7 @@ async function onLogout() {
           <IconAiAvatar class="brand-ai-icon small" />
         </div>
       </div>
-      <el-tooltip :content="ui.sidebarCollapsedEffective ? t('session.expand') : t('session.collapse')" placement="bottom">
+      <el-tooltip hide-after="0" :content="ui.sidebarCollapsedEffective ? t('session.expand') : t('session.collapse')" placement="bottom">
         <el-button
           circle
           size="small"
@@ -128,53 +157,67 @@ async function onLogout() {
       </el-tooltip>
     </div>
 
-    <el-button v-show="!ui.sidebarCollapsedEffective" type="primary" class="new-btn" :icon="Plus" block @click="onNew">
-      {{ t('session.new') }}
-    </el-button>
+    <div v-show="!ui.sidebarCollapsedEffective" class="sidebar-main">
+      <button type="button" class="new-chat-pill" @click="onNew">
+        <span class="new-chat-icon" aria-hidden="true">
+          <el-icon :size="18"><EditPen /></el-icon>
+        </span>
+        <span class="new-chat-label">{{ t('session.new') }}</span>
+        <span class="new-chat-shortcut" aria-hidden="true">
+          <kbd class="kbd">Ctrl</kbd><kbd class="kbd">K</kbd>
+        </span>
+      </button>
 
-    <el-scrollbar v-show="!ui.sidebarCollapsedEffective" class="scroll">
-      <div v-if="chat.loadingSessions" class="muted pad">{{ t('session.loading') }}</div>
-      <div v-else-if="chat.sessions.length === 0" class="muted pad">{{ t('session.empty') }}</div>
-      <div v-else class="list">
-        <div
-          v-for="s in sortedSessions()"
-          :key="s.id"
-          class="item"
-          :class="{ active: s.id === chat.activeSessionId }"
-          @click="onSelect(s)"
-        >
-          <div class="item-main">
-            <span class="item-title">{{ s.title }}</span>
-            <span class="item-time">{{ new Date(s.updatedAt).toLocaleString() }}</span>
+      <div class="hist-head">{{ t('session.historyTitle') }}</div>
+
+      <div ref="histScrollEl" class="hist-scroll u-scroll" @scroll.passive="onHistScroll">
+        <div v-if="chat.loadingSessions" class="muted pad">{{ t('session.loading') }}</div>
+        <div v-else-if="chat.sessions.length === 0" class="muted pad">{{ t('session.empty') }}</div>
+        <div v-else class="list">
+          <div
+            v-for="s in chat.sessions"
+            :key="s.id"
+            class="item"
+            :class="{ active: s.id === chat.activeSessionId }"
+            @click="onSelect(s)"
+          >
+            <span class="item-msg-icon" aria-hidden="true">
+              <IconSessionBubble class="item-msg-svg" />
+            </span>
+            <div class="item-main">
+              <span class="item-title">{{ s.title }}</span>
+            </div>
+            <el-dropdown trigger="click" @command="(cmd: string) => (cmd === 'rename' ? onRename(s) : onDelete(s))">
+              <el-button text class="more" @click.stop>
+                <el-icon><MoreFilled /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="rename">
+                    <el-icon><EditPen /></el-icon>
+                    {{ t('session.rename') }}
+                  </el-dropdown-item>
+                  <el-dropdown-item command="delete" divided>
+                    <el-icon><Delete /></el-icon>
+                    {{ t('session.delete') }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
-          <el-dropdown trigger="click" @command="(cmd: string) => (cmd === 'rename' ? onRename(s) : onDelete(s))">
-            <el-button text class="more" @click.stop>
-              <el-icon><MoreFilled /></el-icon>
-            </el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="rename">
-                  <el-icon><EditPen /></el-icon>
-                  {{ t('session.rename') }}
-                </el-dropdown-item>
-                <el-dropdown-item command="delete" divided>
-                  <el-icon><Delete /></el-icon>
-                  {{ t('session.delete') }}
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          <div v-if="chat.loadingMoreSessions" class="muted load-more">{{ t('session.loadingMore') }}</div>
         </div>
       </div>
-    </el-scrollbar>
+    </div>
 
     <div v-show="ui.sidebarCollapsedEffective" class="collapsed-rail">
-      <el-tooltip :content="t('session.new')" placement="right">
-        <el-button type="primary" circle size="small" class="rail-new" :icon="Plus" @click="onNew" />
+      <el-tooltip hide-after="0" :content="t('session.new')" placement="right">
+        <el-button type="primary" circle size="small" class="rail-new" @click="onNew">
+          <el-icon><EditPen /></el-icon>
+        </el-button>
       </el-tooltip>
     </div>
 
-    <!-- 底部：用户名一行 + 设置 / 退出（语言与主题在设置里） -->
     <div v-show="!ui.sidebarCollapsedEffective" class="sidebar-footer">
       <button type="button" class="user-line" @click="ui.openSettings">
         <span class="user-avatar" :style="{ background: profile.currentAvatar.color }" aria-hidden="true">
@@ -185,7 +228,7 @@ async function onLogout() {
       </button>
     </div>
     <div v-show="ui.sidebarCollapsedEffective" class="sidebar-footer mini">
-      <el-tooltip :content="t('settings.title')" placement="right">
+      <el-tooltip hide-after="0" :content="t('settings.title')" placement="right">
         <el-button circle size="small" @click="ui.openSettings">
           <el-icon><Setting /></el-icon>
         </el-button>
@@ -255,6 +298,8 @@ async function onLogout() {
   width: 280px;
   min-width: 280px;
   max-width: 280px;
+  min-height: 0;
+  height: 100%;
 }
 
 .sidebar.collapsed {
@@ -270,6 +315,15 @@ async function onLogout() {
   gap: 8px;
   padding: 12px 10px 8px;
   min-height: 48px;
+  flex-shrink: 0;
+}
+
+.sidebar-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 10px;
 }
 
 .brand {
@@ -328,41 +382,96 @@ async function onLogout() {
   color: var(--text-secondary);
 }
 
-.new-btn {
-  margin: 0 10px 8px;
-  height: 38px;
-  border-radius: 10px;
-  font-weight: 600;
-}
-
-.scroll {
-  flex: 1;
-  padding: 4px 8px 8px;
-  min-height: 0;
-}
-
-.collapsed-rail {
-  flex: 1;
+.new-chat-pill {
+  width: 100%;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  padding: 8px 0;
-  gap: 10px;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-soft);
+  background: linear-gradient(180deg, rgba(59, 108, 255, 0.08) 0%, rgba(59, 108, 255, 0.03) 100%);
+  color: var(--accent);
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+  flex-shrink: 0;
+}
+.new-chat-pill:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 14px rgba(59, 108, 255, 0.12);
+}
+html.dark .new-chat-pill {
+  background: rgba(122, 162, 255, 0.1);
+  border-color: var(--accent-soft);
+}
+
+.new-chat-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.new-chat-label {
+  flex: 1;
+  text-align: left;
+  min-width: 0;
+}
+
+.new-chat-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.kbd {
+  font-size: 10px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--accent-soft);
+  color: var(--accent);
+  background: var(--bg-elevated);
+  line-height: 1.2;
+}
+
+.hist-head {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 2px 8px;
+  flex-shrink: 0;
+}
+
+.hist-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 8px;
+  margin-right: -4px;
+  padding-right: 4px;
 }
 
 .list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 10px 10px;
-  border-radius: 10px;
-  border: 1px solid transparent;
+  gap: 8px;
+  padding: 10px 10px 10px 8px;
+  border-radius: 14px;
+  border: 1px solid var(--border-subtle);
   background: var(--bg-elevated);
   cursor: pointer;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -378,36 +487,63 @@ async function onLogout() {
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
+.item-msg-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  background: var(--bg-sidebar);
+}
+.item-msg-svg {
+  width: 16px;
+  height: 16px;
+}
+
 .item-main {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 
 .item-title {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.item-time {
-  font-size: 10px;
-  color: var(--text-muted);
+  display: block;
 }
 
 .more {
   color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.load-more {
+  text-align: center;
+  padding: 10px 4px;
+  font-size: 12px;
+}
+
+.collapsed-rail {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  gap: 10px;
+  min-height: 0;
 }
 
 .sidebar-footer {
   border-top: 1px solid var(--border-subtle);
   padding: 10px 10px 12px;
   background: var(--bg-sidebar);
+  flex-shrink: 0;
 }
 .sidebar-footer.mini {
   display: flex;
@@ -510,7 +646,7 @@ async function onLogout() {
   font-size: 13px;
 }
 .pad {
-  padding: 12px 10px;
+  padding: 12px 4px;
 }
 
 .settings-block {

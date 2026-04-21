@@ -1,9 +1,13 @@
 import { http } from './http'
-import type { ChatMessage, ExtractedAttachment, SessionSummary } from './types'
+import type { ChatMessage, ExtractedAttachment, SessionListPage, SessionSummary } from './types'
 
-export async function listSessions(): Promise<SessionSummary[]> {
-  const { data } = await http.get<SessionSummary[]>('/api/sessions')
-  return data
+const SESSION_PAGE = 30
+
+export async function listSessions(offset = 0, limit = SESSION_PAGE): Promise<SessionListPage> {
+  const { data } = await http.get<SessionListPage>('/api/sessions', {
+    params: { offset, limit },
+  })
+  return { items: data.items ?? [], hasMore: !!data.hasMore }
 }
 
 export async function createSession(title?: string): Promise<SessionSummary> {

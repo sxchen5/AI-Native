@@ -47,7 +47,9 @@
     "themeDark": "深色"
   },
   "session": {
-    "new": "新建对话",
+    "new": "新对话",
+    "historyTitle": "历史对话",
+    "loadingMore": "加载更多…",
     "defaultTitle": "新对话",
     "empty": "暂无会话，点击上方新建",
     "loading": "加载中…",

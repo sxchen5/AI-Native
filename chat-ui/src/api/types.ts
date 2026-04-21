@@ -7,6 +7,8 @@ export type SessionSummary = {
   updatedAt: string
 }
 
+export type SessionListPage = { items: SessionSummary[]; hasMore: boolean }
+
 /** 文档卡片消息的 metadata（JSON 字符串解析后） */
 export type DocumentCardMeta = {
   type: 'document_card'

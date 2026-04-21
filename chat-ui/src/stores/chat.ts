@@ -10,8 +10,12 @@ function t(key: string) {
   return i18n.global.t(key) as string
 }
 
+const SESSION_PAGE = 30
+
 export const useChatStore = defineStore('chat', () => {
   const sessions = ref<SessionSummary[]>([])
+  const sessionsHasMore = ref(false)
+  const loadingMoreSessions = ref(false)
   const activeSessionId = ref<string | null>(null)
   const messages = ref<ChatMessage[]>([])
   const loadingSessions = ref(false)
@@ -23,10 +27,23 @@ export const useChatStore = defineStore('chat', () => {
 
   const activeSession = computed(() => sessions.value.find((s) => s.id === activeSessionId.value) ?? null)
 
+  /** 重新拉取已加载数量的会话（至少一页），用于初始化或流式结束后刷新标题 */
   async function fetchSessions() {
     loadingSessions.value = true
     try {
-      sessions.value = await chatApi.listSessions()
+      const want = Math.max(SESSION_PAGE, sessions.value.length)
+      const merged: SessionSummary[] = []
+      let off = 0
+      let lastHasMore = false
+      while (merged.length < want) {
+        const { items, hasMore } = await chatApi.listSessions(off, SESSION_PAGE)
+        lastHasMore = hasMore
+        merged.push(...items)
+        off += items.length
+        if (!hasMore || items.length === 0) break
+      }
+      sessions.value = merged
+      sessionsHasMore.value = lastHasMore
       if (!activeSessionId.value && sessions.value.length > 0) {
         activeSessionId.value = sessions.value[0]!.id
       }
@@ -34,6 +51,26 @@ export const useChatStore = defineStore('chat', () => {
       throw new Error((e as Error)?.message || t('errors.loadSessions'))
     } finally {
       loadingSessions.value = false
+    }
+  }
+
+  async function loadMoreSessions() {
+    if (!sessionsHasMore.value || loadingMoreSessions.value || loadingSessions.value) return
+    loadingMoreSessions.value = true
+    try {
+      const { items, hasMore } = await chatApi.listSessions(sessions.value.length, SESSION_PAGE)
+      const seen = new Set(sessions.value.map((s) => s.id))
+      for (const s of items) {
+        if (!seen.has(s.id)) {
+          sessions.value.push(s)
+          seen.add(s.id)
+        }
+      }
+      sessionsHasMore.value = hasMore
+    } catch (e: unknown) {
+      throw new Error((e as Error)?.message || t('errors.loadSessions'))
+    } finally {
+      loadingMoreSessions.value = false
     }
   }
 
@@ -73,7 +110,7 @@ export const useChatStore = defineStore('chat', () => {
 
   async function renameSession(sessionId: string, title: string) {
     await chatApi.renameSession(sessionId, title)
-    await fetchSessions()
+    sessions.value = sessions.value.map((s) => (s.id === sessionId ? { ...s, title } : s))
     activeSessionId.value = sessionId
   }
 
@@ -89,10 +126,19 @@ export const useChatStore = defineStore('chat', () => {
       activeSessionId.value = null
       messages.value = []
     }
-    await fetchSessions()
+    sessions.value = sessions.value.filter((s) => s.id !== sessionId)
+    if (sessions.value.length === 0) {
+      sessionsHasMore.value = false
+    }
     if (!activeSessionId.value && sessions.value.length > 0) {
       activeSessionId.value = sessions.value[0]!.id
       await fetchMessages(activeSessionId.value)
+    } else if (!activeSessionId.value) {
+      await fetchSessions()
+      if (sessions.value.length > 0) {
+        activeSessionId.value = sessions.value[0]!.id
+        await fetchMessages(activeSessionId.value)
+      }
     }
   }
 
@@ -157,6 +203,8 @@ export const useChatStore = defineStore('chat', () => {
 
   return {
     sessions,
+    sessionsHasMore,
+    loadingMoreSessions,
     activeSessionId,
     messages,
     loadingSessions,
@@ -165,6 +213,7 @@ export const useChatStore = defineStore('chat', () => {
     inputDraft,
     activeSession,
     fetchSessions,
+    loadMoreSessions,
     fetchMessages,
     setActiveSession,
     selectSession,

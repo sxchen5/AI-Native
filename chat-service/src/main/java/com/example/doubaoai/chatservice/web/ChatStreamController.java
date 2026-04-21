@@ -16,6 +16,7 @@ import com.example.doubaoai.chatservice.domain.ChatRole;
 import com.example.doubaoai.chatservice.domain.ChatSession;
 import com.example.doubaoai.chatservice.domain.StoredMessage;
 import com.example.doubaoai.chatservice.service.ChatAiStreamService;
+import com.example.doubaoai.chatservice.service.ChatTitleAiService;
 import com.example.doubaoai.chatservice.service.UserMessageComposer;
 import com.example.doubaoai.chatservice.store.InMemoryChatStore;
 import com.example.doubaoai.chatservice.web.dto.ChatStreamRequest;
@@ -36,13 +37,15 @@ public class ChatStreamController {
     private final InMemoryChatStore store;
     private final ChatAiStreamService aiStreamService;
     private final UserMessageComposer userMessageComposer;
+    private final ChatTitleAiService titleAiService;
     private final ObjectMapper objectMapper;
 
     public ChatStreamController(InMemoryChatStore store, ChatAiStreamService aiStreamService,
-            UserMessageComposer userMessageComposer, ObjectMapper objectMapper) {
+            UserMessageComposer userMessageComposer, ChatTitleAiService titleAiService, ObjectMapper objectMapper) {
         this.store = store;
         this.aiStreamService = aiStreamService;
         this.userMessageComposer = userMessageComposer;
+        this.titleAiService = titleAiService;
         this.objectMapper = objectMapper;
     }
 
@@ -176,6 +179,7 @@ public class ChatStreamController {
             String meta = userMessageComposer.buildUserMessageMetadata(ctxJson, modelMerged);
             store.appendUserMessage(request.sessionId(), displayText, meta);
         }
+        final String displayTextFinal = displayText.strip();
         var assistantPlaceholder = store.appendAssistantPlaceholder(request.sessionId());
 
         List<StoredMessage> historyBefore;
@@ -206,8 +210,8 @@ public class ChatStreamController {
         }
 
         Disposable sub = (appendMode
-                ? aiStreamService.streamReplyAppend(historyBefore, displayText, ctxJson)
-                : aiStreamService.streamReply(historyBefore, displayText, ctxJson))
+                ? aiStreamService.streamReplyAppend(historyBefore, displayTextFinal, ctxJson)
+                : aiStreamService.streamReply(historyBefore, displayTextFinal, ctxJson))
                 .subscribe(chunk -> {
                     if (chunk == null || chunk.isEmpty()) {
                         return;
@@ -231,7 +235,7 @@ public class ChatStreamController {
                     emitter.completeWithError(err);
                 }, () -> {
                     store.updateAssistantContent(request.sessionId(), assistantPlaceholder.id(), full.toString());
-                    maybeUpdateTitleFromConversation(session, displayText, full.toString());
+                    maybeUpdateTitleFromConversation(session, displayTextFinal, full.toString());
                     try {
                         emitter.send(SseEmitter.event()
                                 .data(objectMapper.writeValueAsString(SseEventDto.done())));
@@ -271,28 +275,30 @@ public class ChatStreamController {
     }
 
     /**
-     * 首轮对话完成后，根据用户问题与助手摘要生成会话标题（避免长期显示「新对话」）。
+     * 首轮对话完成后，根据用户输入与助手回复调用模型生成会话标题。
      */
     private void maybeUpdateTitleFromConversation(ChatSession session, String userText, String assistantText) {
         if (!isDefaultSessionTitle(session.title())) {
             return;
         }
-        String u = firstLine(userText, 20);
-        String a = firstLine(assistantText, 16);
-        String title;
-        if (u.isBlank() && a.isBlank()) {
-            return;
-        }
-        if (a.isBlank()) {
-            title = u;
-        }
-        else if (u.isBlank()) {
-            title = a;
-        }
-        else {
-            title = u + " · " + a;
-            if (title.length() > 40) {
-                title = title.substring(0, 37) + "…";
+        String title = titleAiService.summarizeConversationTitle(userText, assistantText);
+        if (title.isBlank()) {
+            String u = firstLine(userText, 20);
+            String a = firstLine(assistantText, 16);
+            if (u.isBlank() && a.isBlank()) {
+                return;
+            }
+            if (a.isBlank()) {
+                title = u;
+            }
+            else if (u.isBlank()) {
+                title = a;
+            }
+            else {
+                title = u + " · " + a;
+                if (title.length() > 40) {
+                    title = title.substring(0, 37) + "…";
+                }
             }
         }
         if (!title.isBlank()) {
