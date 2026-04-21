@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -25,6 +27,8 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api/chat")
 public class ChatAttachmentController {
+
+    private static final Logger log = LoggerFactory.getLogger(ChatAttachmentController.class);
 
     private static final long MAX_BYTES = 5 * 1024 * 1024;
 
@@ -65,6 +69,7 @@ public class ChatAttachmentController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "未能从文件中解析出文本内容");
         }
         String mime = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
+        log.info("attachment extract fileName={} mime={} size={} textChars={}", name, mime, file.getSize(), cleaned.length());
         return Map.of("fileName", name, "mimeType", mime, "text", cleaned);
     }
 

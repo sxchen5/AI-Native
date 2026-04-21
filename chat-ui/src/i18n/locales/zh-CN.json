@@ -37,7 +37,9 @@
     "toggleToc": "展开或收起目录",
     "copy": "复制全文",
     "download": "下载 Markdown",
-    "close": "关闭画布"
+    "close": "关闭画布",
+    "hidePreview": "隐藏预览",
+    "showPreview": "显示预览"
   },
   "header": {
     "logout": "退出登录",

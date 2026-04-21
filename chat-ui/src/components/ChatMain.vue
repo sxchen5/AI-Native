@@ -642,7 +642,12 @@ function askFollowUp(q: string) {
       </div>
     </header>
 
-    <div ref="msgScrollEl" class="msg-scroll u-scroll" @scroll.passive="onMsgScroll">
+    <div
+      ref="msgScrollEl"
+      class="msg-scroll u-scroll"
+      :class="{ 'msg-scroll--jump': showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding }"
+      @scroll.passive="onMsgScroll"
+    >
       <div v-if="!chat.activeSessionId" class="empty">
         <h2>{{ t('chat.emptyTitle') }}</h2>
         <p>{{ t('chat.emptyHint') }}</p>
@@ -850,6 +855,18 @@ function askFollowUp(q: string) {
           </div>
         </div>
         <div ref="bottomAnchor" class="anchor" />
+        <div
+          v-if="showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding"
+          class="jump-float"
+        >
+          <div class="jump-float-inner">
+            <el-tooltip hide-after="0" :content="t('chat.jumpToBottom')" placement="top">
+              <el-button class="jump-btn" circle @click="jumpToLatest">
+                <el-icon :size="18"><ArrowDown /></el-icon>
+              </el-button>
+            </el-tooltip>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -882,16 +899,6 @@ function askFollowUp(q: string) {
     </div>
 
     <footer class="composer">
-      <div
-        v-if="showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding"
-        class="jump-wrap"
-      >
-        <el-tooltip hide-after="0" :content="t('chat.jumpToBottom')" placement="top">
-          <el-button class="jump-btn" circle @click="jumpToLatest">
-            <el-icon :size="18"><ArrowDown /></el-icon>
-          </el-button>
-        </el-tooltip>
-      </div>
       <div class="composer-inner">
         <input
           ref="fileInputRef"
@@ -1139,6 +1146,24 @@ function askFollowUp(q: string) {
   scroll-behavior: smooth;
   padding: 20px 16px 12px;
   background: var(--bg-chat-surface);
+  position: relative;
+}
+.msg-scroll--jump {
+  padding-bottom: 56px;
+}
+
+.jump-float {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 3;
+}
+.jump-float-inner {
+  pointer-events: auto;
 }
 
 .follow-up-bar {
@@ -1309,15 +1334,6 @@ function askFollowUp(q: string) {
   }
 }
 
-.jump-wrap {
-  display: flex;
-  justify-content: center;
-  padding: 0 0 8px;
-  max-width: 880px;
-  margin: 0 auto;
-  width: 100%;
-  box-sizing: border-box;
-}
 .jump-btn {
   width: 40px;
   height: 40px;

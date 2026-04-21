@@ -2,6 +2,8 @@ package com.example.doubaoai.chatservice.service;
 
 import java.time.Duration;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -9,6 +11,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class ChatTitleAiService {
+
+    private static final Logger log = LoggerFactory.getLogger(ChatTitleAiService.class);
 
     private static final Duration BLOCK = Duration.ofSeconds(45);
 
@@ -33,7 +37,9 @@ public class ChatTitleAiService {
         if (raw == null) {
             raw = "";
         }
-        return sanitizeTitle(raw, 40);
+        String t = sanitizeTitle(raw, 40);
+        log.debug("conversation title generated len={}", t.length());
+        return t;
     }
 
     public String summarizeDocumentTitle(String markdownBody) {
@@ -51,7 +57,9 @@ public class ChatTitleAiService {
             raw = "";
         }
         String t = sanitizeTitle(raw, 48);
-        return t.isEmpty() ? "文档" : t;
+        String out = t.isEmpty() ? "文档" : t;
+        log.debug("document title generated len={}", out.length());
+        return out;
     }
 
     private static String strip(String s) {

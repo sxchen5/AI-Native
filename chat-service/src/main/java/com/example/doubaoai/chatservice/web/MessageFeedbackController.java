@@ -3,6 +3,8 @@ package com.example.doubaoai.chatservice.web;
 import java.util.Iterator;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -28,6 +30,8 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/chat/message")
 @Validated
 public class MessageFeedbackController {
+
+    private static final Logger log = LoggerFactory.getLogger(MessageFeedbackController.class);
 
     private final InMemoryChatStore store;
     private final ObjectMapper objectMapper;
@@ -58,6 +62,7 @@ public class MessageFeedbackController {
                             .filter(m -> m.id().equals(req.messageId()))
                             .findFirst()
                             .orElseThrow();
+                    log.debug("message feedback sessionId={} messageId={} vote={}", req.sessionId(), req.messageId(), v);
                     return ResponseEntity.ok(new MessageDto(updated.id(), updated.role(), updated.content(), updated.createdAt(), updated.metadata()));
                 })
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在"));

@@ -47,6 +47,7 @@ management:
 logging:
   level:
     org.springframework.ai: INFO
+    com.example.doubaoai: INFO
 
 # 演示登录（明文密码，仅本地使用；生产请接入统一认证）
 app:

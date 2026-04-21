@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,6 +36,8 @@ import reactor.core.Disposable;
 @Validated
 public class ChatStreamController {
 
+    private static final Logger log = LoggerFactory.getLogger(ChatStreamController.class);
+
     private final InMemoryChatStore store;
     private final ChatAiStreamService aiStreamService;
     private final UserMessageComposer userMessageComposer;
@@ -54,6 +58,7 @@ public class ChatStreamController {
         SseEmitter emitter = new SseEmitter(0L);
         ChatSession session = store.find(request.sessionId()).orElse(null);
         if (session == null) {
+            log.warn("stream rejected: session not found sessionId={}", request.sessionId());
             try {
                 emitter.send(SseEmitter.event()
                         .data(objectMapper.writeValueAsString(SseEventDto.error("会话不存在"))));
@@ -71,6 +76,14 @@ public class ChatStreamController {
         final String ctxJson = request.modelContextJson();
         String displayText;
         final boolean appendMode = appendAfterId != null && !appendAfterId.isBlank();
+
+        log.info("stream start sessionId={} appendMode={} restartId={} appendAfterId={} contentLen={} hasModelCtx={}",
+                request.sessionId(),
+                appendMode,
+                restartId,
+                appendAfterId,
+                rawContent.length(),
+                ctxJson != null && !ctxJson.isBlank());
 
         if (appendMode) {
             if (restartId != null && !restartId.isBlank()) {
@@ -225,6 +238,10 @@ public class ChatStreamController {
                         emitter.completeWithError(ex);
                     }
                 }, err -> {
+                    log.warn("stream error sessionId={} assistantMsgId={}: {}",
+                            request.sessionId(),
+                            assistantPlaceholder.id(),
+                            err.toString());
                     try {
                         emitter.send(SseEmitter.event()
                                 .data(objectMapper.writeValueAsString(SseEventDto.error(err.getMessage()))));
@@ -236,6 +253,7 @@ public class ChatStreamController {
                 }, () -> {
                     store.updateAssistantContent(request.sessionId(), assistantPlaceholder.id(), full.toString());
                     maybeUpdateTitleFromConversation(session, displayTextFinal, full.toString());
+                    log.info("stream done sessionId={} assistantMsgId={} replyChars={}", request.sessionId(), assistantPlaceholder.id(), full.length());
                     try {
                         emitter.send(SseEmitter.event()
                                 .data(objectMapper.writeValueAsString(SseEventDto.done())));

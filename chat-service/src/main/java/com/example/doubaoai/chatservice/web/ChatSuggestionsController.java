@@ -4,6 +4,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,6 +29,8 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/chat")
 @Validated
 public class ChatSuggestionsController {
+
+    private static final Logger log = LoggerFactory.getLogger(ChatSuggestionsController.class);
 
     private final InMemoryChatStore store;
     private final ChatAiStreamService aiStreamService;
@@ -59,7 +63,9 @@ public class ChatSuggestionsController {
                             """;
                     String user = "最近对话：\n" + sb;
                     String raw = aiStreamService.generateShortText(system, user).block(Duration.ofSeconds(45));
-                    return ResponseEntity.ok(new SuggestionsResponse(parseThreeLines(raw == null ? "" : raw)));
+                    List<String> qs = parseThreeLines(raw == null ? "" : raw);
+                    log.debug("suggestions sessionId={} count={}", req.sessionId(), qs.size());
+                    return ResponseEntity.ok(new SuggestionsResponse(qs));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

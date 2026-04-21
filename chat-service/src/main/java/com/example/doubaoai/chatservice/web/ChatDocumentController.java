@@ -2,6 +2,9 @@ package com.example.doubaoai.chatservice.web;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -30,6 +33,8 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/chat/document")
 @Validated
 public class ChatDocumentController {
+
+    private static final Logger log = LoggerFactory.getLogger(ChatDocumentController.class);
 
     private final InMemoryChatStore store;
     private final ObjectMapper objectMapper;
@@ -66,6 +71,8 @@ public class ChatDocumentController {
                         meta.put("frozen", Boolean.FALSE);
                         String metaJson = writeMeta(meta);
                         StoredMessage doc = store.appendAssistantMessage(req.sessionId(), body, metaJson);
+                        log.info("document convert sessionId={} sourceMsgId={} docMsgId={} title={}",
+                                req.sessionId(), src.id(), doc.id(), title);
                         return ResponseEntity.ok(toDto(doc));
                     })
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在"));
@@ -103,6 +110,8 @@ public class ChatDocumentController {
                                 .filter(m -> m.id().equals(req.messageId()))
                                 .findFirst()
                                 .orElseThrow();
+                        log.info("document update sessionId={} messageId={} bodyChars={}",
+                                req.sessionId(), req.messageId(), req.markdownBody() == null ? 0 : req.markdownBody().length());
                         return ResponseEntity.ok(toDto(updated));
                     })
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在"));
@@ -136,6 +145,7 @@ public class ChatDocumentController {
                             .filter(m -> m.id().equals(target.id()))
                             .findFirst()
                             .orElseThrow();
+                    log.info("document freeze sessionId={} messageId={}", req.sessionId(), target.id());
                     return ResponseEntity.ok(toDto(updated));
                 })
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在"));

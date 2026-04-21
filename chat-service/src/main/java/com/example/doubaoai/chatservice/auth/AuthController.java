@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +34,8 @@ import jakarta.validation.Valid;
 @Validated
 public class AuthController {
 
+    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
+
     private final AuthUserProperties authUserProperties;
     private final CaptchaService captchaService;
     private final CaptchaImageRenderer captchaImageRenderer;
@@ -49,6 +53,7 @@ public class AuthController {
         String code = captchaService.createCode();
         captchaService.save(id, code);
         byte[] png = captchaImageRenderer.renderPng(code);
+        log.debug("captcha issued id={}", id);
         return ResponseEntity.ok()
                 .header("X-Captcha-Id", id)
                 .header(HttpHeaders.CACHE_CONTROL, "no-store, no-cache, must-revalidate")
@@ -73,11 +78,13 @@ public class AuthController {
         SecurityContextHolder.setContext(context);
         HttpSession session = request.getSession(true);
         securityContextRepository.saveContext(context, request, response);
+        log.info("login ok user={}", auth.getName());
         return Map.of("username", auth.getName());
     }
 
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(HttpServletRequest request) {
+        log.info("logout");
         SecurityContextHolder.clearContext();
         HttpSession session = request.getSession(false);
         if (session != null) {

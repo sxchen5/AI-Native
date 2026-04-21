@@ -9,6 +9,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import com.example.doubaoai.chatservice.domain.ChatRole;
@@ -21,6 +23,8 @@ import com.example.doubaoai.chatservice.domain.StoredMessage;
 @Component
 public class InMemoryChatStore {
 
+    private static final Logger log = LoggerFactory.getLogger(InMemoryChatStore.class);
+
     private final Map<String, ChatSession> sessions = new ConcurrentHashMap<>();
 
     public ChatSession createSession(String title) {
@@ -29,6 +33,7 @@ public class InMemoryChatStore {
         String safeTitle = (title == null || title.isBlank()) ? "新对话" : title.strip();
         ChatSession session = new ChatSession(id, safeTitle, now);
         sessions.put(id, session);
+        log.debug("store createSession id={} title={}", id, safeTitle);
         return session;
     }
 
@@ -52,10 +57,12 @@ public class InMemoryChatStore {
             throw new IllegalArgumentException("标题不能为空");
         }
         session.setTitle(newTitle.strip());
+        log.debug("store rename sessionId={}", sessionId);
     }
 
     public void delete(String sessionId) {
         sessions.remove(sessionId);
+        log.debug("store delete sessionId={}", sessionId);
     }
 
     public StoredMessage appendUserMessage(String sessionId, String content) {

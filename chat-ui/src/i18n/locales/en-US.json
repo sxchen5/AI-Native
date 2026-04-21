@@ -37,7 +37,9 @@
     "toggleToc": "Toggle outline",
     "copy": "Copy all",
     "download": "Download Markdown",
-    "close": "Close canvas"
+    "close": "Close canvas",
+    "hidePreview": "Hide preview",
+    "showPreview": "Show preview"
   },
   "header": {
     "logout": "Sign out",

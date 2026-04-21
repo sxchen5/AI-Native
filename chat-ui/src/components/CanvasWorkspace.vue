@@ -6,6 +6,7 @@ import {
   DArrowRight,
   Document,
   Download,
+  Hide,
   View,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -37,6 +38,7 @@ const readOnlyCanvas = computed(() => route.query.readOnly === '1' || route.quer
 const canvasDraft = ref('')
 const lastModified = ref<Date | null>(null)
 const tocCollapsed = ref(false)
+const previewCollapsed = ref(false)
 const previewRef = ref<HTMLElement | null>(null)
 const tocInnerRef = ref<HTMLElement | null>(null)
 const previewScrollFade = useScrollbarFade(previewRef)
@@ -77,7 +79,6 @@ async function applyToMessage() {
     chat.messages = chat.messages.map((m) =>
       m.id === id ? { ...m, content: updated.content, metadata: updated.metadata } : m,
     )
-    await chatApi.freezeDocumentMessage(sid, id)
     await chat.fetchMessages(sid)
     touchModified()
     ElMessage.success(t('chat.canvasApplied'))
@@ -183,6 +184,16 @@ onBeforeUnmount(() => {
   tocScrollFade.detach()
 })
 
+watch(previewCollapsed, async (collapsed) => {
+  await nextTick()
+  if (collapsed) {
+    previewScrollFade.detach()
+  }
+  else {
+    previewScrollFade.attach()
+  }
+})
+
 watch(messageId, () => syncDraftFromStore())
 watch(
   () => chat.messages,
@@ -231,6 +242,14 @@ watch(
                 <el-icon><Download /></el-icon>
               </el-button>
             </el-tooltip>
+            <el-tooltip
+              :content="previewCollapsed ? t('canvas.showPreview') : t('canvas.hidePreview')"
+              placement="bottom"
+            >
+              <el-button text circle @click="previewCollapsed = !previewCollapsed">
+                <el-icon><Hide v-if="!previewCollapsed" /><View v-else /></el-icon>
+              </el-button>
+            </el-tooltip>
           </template>
           <el-divider direction="vertical" class="toolbar-divider" />
           <el-tooltip :content="t('canvas.close')" placement="bottom">
@@ -266,7 +285,7 @@ watch(
           </div>
         </aside>
 
-        <div class="split-editor">
+        <div class="split-editor" :class="{ 'split-editor--single': previewCollapsed }">
           <div class="split-pane split-pane--source">
             <div class="pane-label">
               <el-icon><Document /></el-icon>
@@ -281,7 +300,7 @@ watch(
               @input="touchModified"
             />
           </div>
-          <div class="split-pane split-pane--preview">
+          <div v-show="!previewCollapsed" class="split-pane split-pane--preview">
             <div class="pane-label">
               <el-icon><View /></el-icon>
               {{ t('canvas.preview') }}
@@ -510,8 +529,12 @@ watch(
   min-height: 0;
 }
 
+.split-editor--single {
+  grid-template-columns: 1fr;
+}
+
 @media (max-width: 1100px) {
-  .split-editor {
+  .split-editor:not(.split-editor--single) {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(160px, 38%) minmax(0, 1fr);
   }
@@ -528,8 +551,12 @@ watch(
   border-right: 1px solid var(--border-subtle);
 }
 
+.split-editor--single .split-pane--source {
+  border-right: none;
+}
+
 @media (max-width: 1100px) {
-  .split-pane--source {
+  .split-editor:not(.split-editor--single) .split-pane--source {
     border-right: none;
     border-bottom: 1px solid var(--border-subtle);
   }
