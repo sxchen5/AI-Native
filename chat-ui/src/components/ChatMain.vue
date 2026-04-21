@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import {
+  CircleCheck,
+  CircleCheckFilled,
   CircleClose,
+  CircleCloseFilled,
   DocumentCopy,
   Edit,
   EditPen,
   Loading,
   Microphone,
   Promotion,
-  RefreshRight,
-  Top,
-  Bottom,
 } from '@element-plus/icons-vue'
-import { Fold, FullScreen } from '@element-plus/icons-vue'
+import { FullScreen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -109,13 +109,6 @@ function onKeydown(e: KeyboardEvent) {
     e.preventDefault()
     void onSend()
   }
-}
-
-function findPreviousUserMessage(fromIndex: number): ChatMessage | null {
-  for (let i = fromIndex - 1; i >= 0; i--) {
-    if (chat.messages[i]!.role === 'USER') return chat.messages[i]!
-  }
-  return null
 }
 
 function runStream(
@@ -218,19 +211,6 @@ async function resendUserMessage(userMsgId: string) {
   await runStream(text, userMsgId)
 }
 
-async function regenerateAssistant(assistantIndex: number) {
-  const sid = chat.activeSessionId
-  if (!sid || chat.sending) return
-  const prevUser = findPreviousUserMessage(assistantIndex)
-  if (!prevUser) {
-    ElMessage.warning(t('chat.noUserBefore'))
-    return
-  }
-  const text = (userEdits[prevUser.id] ?? prevUser.content).trim()
-  chat.messages = chat.messages.slice(0, assistantIndex)
-  await runStream(text, prevUser.id)
-}
-
 function setFeedback(msgId: string, v: 'up' | 'down') {
   feedback[msgId] = feedback[msgId] === v ? null : v
 }
@@ -275,11 +255,6 @@ function goFullChat() {
 <template>
   <main class="main" :class="{ 'main--embedded': props.hideThreadHead }">
     <div v-if="props.hideThreadHead && chat.activeSessionId" class="embed-bar">
-      <el-tooltip :content="t('chat.fullChatView')" placement="bottom">
-        <el-button text circle size="small" class="embed-fold" @click="goFullChat">
-          <el-icon><Fold /></el-icon>
-        </el-button>
-      </el-tooltip>
       <div class="embed-bar-center">
         <span class="embed-title">{{ chat.activeSession?.title || t('session.defaultTitle') }}</span>
         <span class="embed-sub">{{ t('chat.landDisclaimer') }}</span>
@@ -332,8 +307,6 @@ function goFullChat() {
           @mouseleave="onRowHover(m.id, false)"
         >
           <div class="msg-animate bubble-wrap" :class="m.role === 'USER' ? 'user' : 'ai'">
-            <div v-if="m.role === 'ASSISTANT'" class="ai-label">{{ t('chat.assistant') }}</div>
-
             <div v-if="m.role === 'USER'" class="user-block">
               <template v-if="editingUserId === m.id">
                 <el-input
@@ -348,7 +321,7 @@ function goFullChat() {
               <div v-else class="user-read">
                 {{ userEdits[m.id] ?? m.content }}
               </div>
-              <div v-if="showUserToolbar(idx, m)" class="user-actions">
+              <div class="user-actions" :class="{ 'user-actions--visible': showUserToolbar(idx, m) }">
                 <template v-if="editingUserId === m.id">
                   <el-button text size="small" @click="cancelUserEdit(m)">
                     {{ t('chat.cancelEdit') }}
@@ -387,43 +360,43 @@ function goFullChat() {
               <div v-else class="prose-ai" v-html="md(m.content)" />
             </div>
 
-            <div v-if="showAiToolbar(idx, m)" class="ai-toolbar">
-              <el-button text size="small" @click="copyText(m.content)">
-                <el-icon><DocumentCopy /></el-icon>
-                {{ t('chat.copy') }}
-              </el-button>
-              <el-button text size="small" :disabled="chat.sending" @click="regenerateAssistant(idx)">
-                <el-icon><RefreshRight /></el-icon>
-                {{ t('chat.regenerate') }}
-              </el-button>
-              <el-button
-                text
-                size="small"
-                :type="feedback[m.id] === 'up' ? 'primary' : 'default'"
-                @click="setFeedback(m.id, 'up')"
-              >
-                <el-icon><Top /></el-icon>
-              </el-button>
-              <el-button
-                text
-                size="small"
-                :type="feedback[m.id] === 'down' ? 'danger' : 'default'"
-                @click="setFeedback(m.id, 'down')"
-              >
-                <el-icon><Bottom /></el-icon>
-              </el-button>
-              <el-button text size="small" @click="speakAssistant(m.content)">
-                <el-icon><Microphone /></el-icon>
-                {{ t('chat.speak') }}
-              </el-button>
-              <el-button text size="small" @click="openCanvasPage(m)">
-                <el-icon><EditPen /></el-icon>
-                {{ t('chat.toCanvas') }}
-              </el-button>
-            </div>
-
-            <div class="meta">
-              <time>{{ new Date(m.createdAt).toLocaleString() }}</time>
+            <div
+              v-if="m.role === 'ASSISTANT'"
+              class="ai-toolbar-slot"
+              :class="{ 'ai-toolbar-slot--streaming': isAssistantStreaming(m) }"
+            >
+              <div class="ai-toolbar" :class="{ 'ai-toolbar--visible': showAiToolbar(idx, m) }">
+                <el-button text size="small" @click="copyText(m.content)">
+                  <el-icon><DocumentCopy /></el-icon>
+                  {{ t('chat.copy') }}
+                </el-button>
+                <el-button
+                  text
+                  size="small"
+                  :type="feedback[m.id] === 'up' ? 'primary' : 'default'"
+                  @click="setFeedback(m.id, 'up')"
+                >
+                  <el-icon><CircleCheckFilled v-if="feedback[m.id] === 'up'" /><CircleCheck v-else /></el-icon>
+                  {{ t('chat.like') }}
+                </el-button>
+                <el-button
+                  text
+                  size="small"
+                  :type="feedback[m.id] === 'down' ? 'danger' : 'default'"
+                  @click="setFeedback(m.id, 'down')"
+                >
+                  <el-icon><CircleCloseFilled v-if="feedback[m.id] === 'down'" /><CircleClose v-else /></el-icon>
+                  {{ t('chat.dislike') }}
+                </el-button>
+                <el-button text size="small" @click="speakAssistant(m.content)">
+                  <el-icon><Microphone /></el-icon>
+                  {{ t('chat.speak') }}
+                </el-button>
+                <el-button text size="small" @click="openCanvasPage(m)">
+                  <el-icon><EditPen /></el-icon>
+                  {{ t('chat.toCanvas') }}
+                </el-button>
+              </div>
             </div>
           </div>
         </div>
@@ -477,17 +450,18 @@ function goFullChat() {
   grid-template-rows: auto 1fr auto;
   min-width: 0;
   min-height: 0;
-  background: var(--bg-chat-panel);
+  background: #ffffff;
   transition: background 0.35s ease;
 }
 
 .embed-bar {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-chat-panel);
+  background: #ffffff;
   flex-shrink: 0;
 }
 
@@ -498,6 +472,7 @@ function goFullChat() {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding: 0 8px;
 }
 
 .embed-title {
@@ -512,10 +487,6 @@ function goFullChat() {
 .embed-sub {
   font-size: 11px;
   color: var(--text-muted);
-}
-
-.embed-fold {
-  color: var(--text-secondary);
 }
 
 .landing {
@@ -614,7 +585,7 @@ function goFullChat() {
   flex-shrink: 0;
   padding: 16px 20px 10px;
   border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-chat-panel);
+  background: #ffffff;
 }
 
 .thread-head-inner {
@@ -643,6 +614,7 @@ function goFullChat() {
   scroll-behavior: smooth;
   padding: 20px 16px 12px;
   min-height: 0;
+  background: #ffffff;
 }
 
 .empty {
@@ -688,15 +660,6 @@ function goFullChat() {
   max-width: min(720px, 92%);
 }
 
-.ai-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-  margin-bottom: 6px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
 .user-block {
   width: 100%;
 }
@@ -731,6 +694,15 @@ function goFullChat() {
   gap: 4px;
   margin-top: 6px;
   justify-content: flex-end;
+  min-height: 32px;
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.user-actions--visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 .user-actions :deep(.el-button) {
   color: var(--text-secondary);
@@ -747,22 +719,32 @@ function goFullChat() {
   color: var(--text-primary);
 }
 
+.ai-toolbar-slot {
+  min-height: 40px;
+  margin-top: 6px;
+}
+.ai-toolbar-slot--streaming {
+  min-height: 0;
+  margin-top: 0;
+}
+
 .ai-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 2px 6px;
-  margin-top: 8px;
   align-items: center;
+  min-height: 36px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.ai-toolbar--visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 .ai-toolbar :deep(.el-button) {
   font-size: 12px;
   padding: 4px 6px;
-}
-
-.meta {
-  margin-top: 4px;
-  font-size: 11px;
-  color: var(--text-muted);
 }
 
 .typing {
@@ -814,7 +796,7 @@ function goFullChat() {
 
 .composer {
   border-top: 1px solid var(--border-subtle);
-  background: var(--bg-chat-panel);
+  background: #ffffff;
   padding: 12px 16px 14px;
   box-shadow: 0 -4px 24px rgba(15, 23, 42, 0.06);
   transition:

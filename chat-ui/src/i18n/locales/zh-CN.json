@@ -93,6 +93,8 @@
     "refresh": "刷新",
     "assistant": "助手",
     "copy": "复制",
+    "like": "点赞",
+    "dislike": "点踩",
     "edit": "编辑",
     "cancelEdit": "取消编辑",
     "resend": "重新发送",

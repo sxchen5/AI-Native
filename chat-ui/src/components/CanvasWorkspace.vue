@@ -19,11 +19,16 @@ import { useUiStore } from '../stores/ui'
 import { extractMarkdownToc, firstMarkdownTitle } from '../utils/canvasOutline'
 import { renderAiMarkdown } from '../utils/markdown'
 
+const CANVAS_CHAT_WIDTH_KEY = 'doubao-canvas-chat-width-px'
+
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const chat = useChatStore()
 const ui = useUiStore()
+
+const shellRef = ref<HTMLElement | null>(null)
+const chatPaneWidthPx = ref(420)
 
 const messageId = computed(() => (typeof route.query.messageId === 'string' ? route.query.messageId : null))
 const canvasDraft = ref('')
@@ -102,8 +107,54 @@ async function scrollToTocItem(i: number) {
   el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+function initChatPaneWidth() {
+  try {
+    const saved = localStorage.getItem(CANVAS_CHAT_WIDTH_KEY)
+    if (saved) {
+      const n = Number(saved)
+      if (!Number.isNaN(n) && n >= 200) {
+        chatPaneWidthPx.value = n
+        return
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  const el = shellRef.value
+  if (el) {
+    chatPaneWidthPx.value = Math.round(el.getBoundingClientRect().width * 0.35)
+  }
+}
+
+function startResize(e: MouseEvent) {
+  e.preventDefault()
+  const shell = shellRef.value
+  if (!shell) return
+  const rect = shell.getBoundingClientRect()
+  const minChat = 200
+  const minEditor = 280
+
+  const onMove = (ev: MouseEvent) => {
+    const w = ev.clientX - rect.left
+    const maxChat = rect.width - minEditor
+    chatPaneWidthPx.value = Math.min(maxChat, Math.max(minChat, w))
+  }
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    try {
+      localStorage.setItem(CANVAS_CHAT_WIDTH_KEY, String(Math.round(chatPaneWidthPx.value)))
+    } catch {
+      /* ignore */
+    }
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
 onMounted(() => {
   ui.enterCanvasLayout()
+  nextTick(() => initChatPaneWidth())
   syncDraftFromStore()
 })
 
@@ -120,10 +171,23 @@ watch(
 </script>
 
 <template>
-  <div class="canvas-shell">
-    <section class="chat-pane" aria-label="chat">
+  <div ref="shellRef" class="canvas-shell">
+    <section
+      class="chat-pane"
+      aria-label="chat"
+      :style="{ width: chatPaneWidthPx + 'px', flex: '0 0 auto' }"
+    >
       <ChatWorkspace compact />
     </section>
+    <div
+      class="canvas-resizer"
+      role="separator"
+      :aria-valuenow="Math.round(chatPaneWidthPx)"
+      aria-orientation="vertical"
+      aria-label="resize"
+      tabindex="0"
+      @mousedown="startResize"
+    />
     <aside class="editor-pane" aria-label="canvas">
       <header class="doc-toolbar">
         <div class="doc-toolbar-left">
@@ -219,41 +283,56 @@ watch(
 .canvas-shell {
   height: 100%;
   min-height: 0;
-  display: grid;
-  /* 参考豆包画布：约 35% / 65% */
-  grid-template-columns: minmax(260px, 35%) minmax(0, 65%);
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
   background: var(--bg-app);
 }
 
 @media (max-width: 960px) {
   .canvas-shell {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(220px, 36vh) minmax(0, 1fr);
+    flex-direction: column;
+  }
+  .chat-pane {
+    width: 100% !important;
+    flex: 0 0 auto !important;
+    max-height: 38vh;
+  }
+  .canvas-resizer {
+    display: none;
   }
 }
 
 .chat-pane {
   min-width: 0;
   min-height: 0;
-  border-right: 1px solid var(--border-subtle);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   background: #fff;
 }
 
-@media (max-width: 960px) {
-  .chat-pane {
-    border-right: none;
-    border-bottom: 1px solid var(--border-subtle);
-  }
+.canvas-resizer {
+  flex: 0 0 6px;
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 2;
+  align-self: stretch;
+}
+
+.canvas-resizer:hover,
+.canvas-resizer:active {
+  background: rgba(59, 108, 255, 0.12);
 }
 
 .editor-pane {
-  display: flex;
-  flex-direction: column;
+  flex: 1 1 0;
   min-width: 0;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
   background: #fff;
 }
 

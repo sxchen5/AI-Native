@@ -169,10 +169,6 @@ async function onLogout() {
         <span class="user-name">{{ auth.username || '—' }}</span>
         <el-icon class="gear"><Setting /></el-icon>
       </button>
-      <el-button text class="logout-line" @click="onLogout">
-        <el-icon><SwitchButton /></el-icon>
-        {{ t('header.logout') }}
-      </el-button>
     </div>
     <div v-show="ui.sidebarCollapsedEffective" class="sidebar-footer mini">
       <el-tooltip :content="t('settings.title')" placement="right">
@@ -202,6 +198,12 @@ async function onLogout() {
             {{ t('header.themeDark') }}
           </el-radio-button>
         </el-radio-group>
+      </div>
+      <div class="settings-block settings-logout">
+        <el-button class="logout-in-settings" @click="onLogout">
+          <el-icon><SwitchButton /></el-icon>
+          {{ t('header.logout') }}
+        </el-button>
       </div>
     </el-dialog>
   </aside>
@@ -402,12 +404,14 @@ async function onLogout() {
   flex-shrink: 0;
 }
 
-.logout-line {
-  width: 100%;
+.settings-logout {
+  margin-bottom: 0;
   margin-top: 8px;
-  justify-content: flex-start;
-  color: var(--text-secondary);
-  font-size: 13px;
+}
+
+.logout-in-settings {
+  width: 100%;
+  justify-content: center;
 }
 
 .muted {

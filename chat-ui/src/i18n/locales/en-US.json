@@ -93,6 +93,8 @@
     "refresh": "Refresh",
     "assistant": "Assistant",
     "copy": "Copy",
+    "like": "Like",
+    "dislike": "Dislike",
     "edit": "Edit",
     "cancelEdit": "Cancel",
     "resend": "Resend",
