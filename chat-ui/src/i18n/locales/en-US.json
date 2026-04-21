@@ -91,6 +91,8 @@
     "embedEmptyHint": "No messages in this session. Edit the document on the right or return to full chat.",
     "emptyTitle": "Start a conversation",
     "emptyHint": "Create or pick a chat on the left, then type below. Streaming typewriter output is supported.",
+    "draftTitle": "Start a conversation",
+    "draftHint": "Type below and send to start a new chat. Streaming typewriter output is supported.",
     "selectSession": "Select a conversation",
     "loadingMessages": "Loading messages…",
     "inputPlaceholder": "Message… Enter to send, Shift+Enter for newline",

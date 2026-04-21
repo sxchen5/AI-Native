@@ -17,6 +17,7 @@ import com.example.doubaoai.chatservice.domain.ChatRole;
 import com.example.doubaoai.chatservice.domain.StoredMessage;
 import com.example.doubaoai.chatservice.service.ChatAiStreamService;
 import com.example.doubaoai.chatservice.store.InMemoryChatStore;
+import com.example.doubaoai.chatservice.util.TextClipUtil;
 import com.example.doubaoai.chatservice.web.dto.SuggestionsRequest;
 import com.example.doubaoai.chatservice.web.dto.SuggestionsResponse;
 
@@ -31,6 +32,8 @@ import jakarta.validation.Valid;
 public class ChatSuggestionsController {
 
     private static final Logger log = LoggerFactory.getLogger(ChatSuggestionsController.class);
+
+    private static final int MAX_CHARS = 15;
 
     private final InMemoryChatStore store;
     private final ChatAiStreamService aiStreamService;
@@ -48,26 +51,55 @@ public class ChatSuggestionsController {
                     if (all.isEmpty()) {
                         return ResponseEntity.ok(new SuggestionsResponse(List.of()));
                     }
-                    int from = Math.max(0, all.size() - 8);
-                    StringBuilder sb = new StringBuilder();
-                    for (int i = from; i < all.size(); i++) {
+                    StoredMessage lastUser = null;
+                    StoredMessage lastAssistant = null;
+                    for (int i = all.size() - 1; i >= 0; i--) {
                         StoredMessage m = all.get(i);
-                        String role = m.role() == ChatRole.USER ? "用户" : "助手";
-                        sb.append(role).append("：")
-                                .append(m.content() == null ? "" : m.content().strip().replace('\n', ' '))
-                                .append("\n");
+                        if (lastUser == null && m.role() == ChatRole.USER) {
+                            lastUser = m;
+                        }
+                        if (lastAssistant == null && m.role() == ChatRole.ASSISTANT) {
+                            lastAssistant = m;
+                        }
+                        if (lastUser != null && lastAssistant != null) {
+                            break;
+                        }
+                    }
+                    if (lastUser == null && lastAssistant == null) {
+                        return ResponseEntity.ok(new SuggestionsResponse(List.of()));
+                    }
+                    StringBuilder ctx = new StringBuilder();
+                    if (lastUser != null) {
+                        ctx.append("【用户最近提问】\n")
+                                .append(clipForPrompt(lastUser.content()))
+                                .append("\n\n");
+                    }
+                    if (lastAssistant != null) {
+                        ctx.append("【助手最近回复】\n")
+                                .append(clipForPrompt(lastAssistant.content()));
                     }
                     String system = """
-                            你是对话助手。根据下列最近对话（尤其最后一条用户与助手），生成恰好3条用户可能继续追问的问题。
-                            要求：每行一条；不要编号、不要引号、不要多余说明；每条不超过15个汉字（或等宽英文词）；中文优先。
+                            你是追问建议助手。上面「用户最近提问」与「助手最近回复」是用户当前话题的全部依据。
+                            请基于这两段内容，生成恰好3条用户很可能接着问的问题；每条必须与上文主题直接相关，禁止泛泛的「你好」「谢谢」「介绍一下」等无关句。
+                            输出格式：严格3行，每行一条完整问句；不要编号、不要引号、不要任何前后说明；每条不超过15个汉字（或等宽英文词）；句末不要用省略号。
                             """;
-                    String user = "最近对话：\n" + sb;
-                    String raw = aiStreamService.generateShortText(system, user).block(Duration.ofSeconds(45));
+                    String raw = aiStreamService.generateShortText(system, ctx.toString()).block(Duration.ofSeconds(45));
                     List<String> qs = parseThreeLines(raw == null ? "" : raw);
                     log.debug("suggestions sessionId={} count={}", req.sessionId(), qs.size());
                     return ResponseEntity.ok(new SuggestionsResponse(qs));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    private static String clipForPrompt(String content) {
+        if (content == null) {
+            return "";
+        }
+        String s = content.strip().replace('\r', ' ').replace('\n', ' ');
+        if (s.length() > 3500) {
+            return s.substring(0, 3500) + "（后文略）";
+        }
+        return s;
     }
 
     private static List<String> parseThreeLines(String raw) {
@@ -78,17 +110,18 @@ public class ChatSuggestionsController {
         for (String line : raw.strip().split("\\R")) {
             String s = line.strip();
             s = s.replaceFirst("^\\d+[\\.、)\\]]\\s*", "").replaceAll("^[\"'「]|[\"'」]$", "").strip();
+            s = TextClipUtil.stripTrailingEllipsis(s);
             if (!s.isEmpty()) {
-                out.add(s.length() > 15 ? s.substring(0, 14) + "…" : s);
+                out.add(TextClipUtil.clipNatural(s, MAX_CHARS));
             }
             if (out.size() >= 3) {
                 break;
             }
         }
         if (out.isEmpty()) {
-            String one = raw.strip().replaceFirst("^[\"'「]|[\"'」]$", "").strip();
+            String one = TextClipUtil.stripTrailingEllipsis(raw.strip().replaceFirst("^[\"'「]|[\"'」]$", "").strip());
             if (!one.isEmpty()) {
-                out.add(one.length() > 15 ? one.substring(0, 14) + "…" : one);
+                out.add(TextClipUtil.clipNatural(one, MAX_CHARS));
             }
         }
         return out;

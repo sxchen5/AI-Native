@@ -22,6 +22,7 @@ import com.example.doubaoai.chatservice.service.ChatTitleAiService;
 import com.example.doubaoai.chatservice.service.UserMessageComposer;
 import com.example.doubaoai.chatservice.store.InMemoryChatStore;
 import com.example.doubaoai.chatservice.web.dto.ChatStreamRequest;
+import com.example.doubaoai.chatservice.util.TextClipUtil;
 import com.example.doubaoai.chatservice.web.dto.SseEventDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -314,11 +315,11 @@ public class ChatStreamController {
             }
             else {
                 String joined = u + "·" + a;
-                title = joined.length() <= 15 ? joined : (u.length() <= 15 ? u : u.substring(0, 14) + "…");
+                title = joined.length() <= 15 ? joined : TextClipUtil.clipNatural(u, 15);
             }
         }
         if (title.length() > 15) {
-            title = title.substring(0, 14) + "…";
+            title = TextClipUtil.clipNatural(title, 15);
         }
         if (!title.isBlank()) {
             session.setTitle(title);

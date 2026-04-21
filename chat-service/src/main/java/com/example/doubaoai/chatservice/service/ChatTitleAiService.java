@@ -6,6 +6,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import com.example.doubaoai.chatservice.util.TextClipUtil;
+
 /**
  * 会话标题、文档标题等短文本摘要（调用模型一次，阻塞等待结果）。
  */
@@ -29,10 +31,11 @@ public class ChatTitleAiService {
             return "";
         }
         String sys = """
-                你是对话标题生成器。根据首条「用户消息」与对应「助手回复」提炼一句新会话标题。
-                规则：仅输出一行；总长度不超过15个汉字（或等宽英文单词），不要引号、书名号、冒号结尾；不要「对话」「聊天」等空话；中文优先。
+                你是对话标题生成器。输入中会给出「用户第一条提问」与「助手对应回复」全文（可能较长）。
+                请只根据这两段真实内容概括主题，输出一行会话标题；必须与讨论内容相关，禁止泛泛的「新对话」「问答」「聊天」等。
+                标题不超过15个汉字（或等宽英文词），句末不要用省略号；不要引号、书名号。
                 """;
-        String user = "【用户】\n" + (u.isEmpty() ? "（无文字，可能仅有附件）" : u) + "\n\n【助手】\n" + (a.isEmpty() ? "（空）" : a);
+        String user = "【用户第一条提问】\n" + (u.isEmpty() ? "（无文字，可能仅有附件）" : u) + "\n\n【助手对应回复】\n" + (a.isEmpty() ? "（空）" : a);
         String raw = chatAiStreamService.generateShortText(sys, user).block(BLOCK);
         if (raw == null) {
             raw = "";
@@ -79,9 +82,10 @@ public class ChatTitleAiService {
         }
         String t = raw.strip().replace('\r', ' ').replace('\n', ' ');
         t = t.replaceFirst("^[「\"'“]+", "").replaceFirst("[」\"'”]+$", "").strip();
+        t = TextClipUtil.stripTrailingEllipsis(t);
         if (t.length() > maxLen) {
-            t = t.substring(0, maxLen - 1) + "…";
+            t = TextClipUtil.clipNatural(t, maxLen);
         }
-        return t;
+        return TextClipUtil.stripTrailingEllipsis(t);
     }
 }

@@ -91,6 +91,8 @@
     "embedEmptyHint": "当前会话暂无消息，可在右侧编辑文档或返回全屏聊天继续对话。",
     "emptyTitle": "开始对话",
     "emptyHint": "左侧新建或选择会话，在下方输入问题；支持流式打字机输出。",
+    "draftTitle": "开始对话",
+    "draftHint": "在下方输入问题后发送即可开始新会话；支持流式打字机输出。",
     "selectSession": "请选择会话",
     "loadingMessages": "加载消息…",
     "inputPlaceholder": "输入消息，Enter 发送，Shift+Enter 换行",

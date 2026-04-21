@@ -44,9 +44,6 @@ export const useChatStore = defineStore('chat', () => {
       }
       sessions.value = merged
       sessionsHasMore.value = lastHasMore
-      if (!activeSessionId.value && sessions.value.length > 0) {
-        activeSessionId.value = sessions.value[0]!.id
-      }
     } catch (e: unknown) {
       throw new Error((e as Error)?.message || t('errors.loadSessions'))
     } finally {
@@ -139,10 +136,6 @@ export const useChatStore = defineStore('chat', () => {
       await fetchMessages(activeSessionId.value)
     } else if (!activeSessionId.value) {
       await fetchSessions()
-      if (sessions.value.length > 0) {
-        activeSessionId.value = sessions.value[0]!.id
-        await fetchMessages(activeSessionId.value)
-      }
     }
   }
 

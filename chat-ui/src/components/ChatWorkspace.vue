@@ -20,12 +20,8 @@ const ui = useUiStore()
 onMounted(async () => {
   try {
     await chat.fetchSessions()
-    if (chat.sessions.length === 0) {
-      await chat.createSession()
-    }
-    if (chat.activeSessionId) {
-      await chat.fetchMessages(chat.activeSessionId)
-    }
+    // 登录后不自动新建会话：用户可先输入，首次发送时再创建会话
+    chat.setActiveSession(null)
   } catch (e: unknown) {
     ElMessage.error((e as Error).message || t('errors.loadSessions'))
   }

@@ -51,8 +51,6 @@ const editingUserId = ref<string | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const uploadBusy = ref(false)
 const followUpQuestions = ref<string[]>([])
-/** 当前 SSE 正在输出的助手消息 id（首包前为占位 id），用于隐藏该条工具栏 */
-const streamingAssistantId = ref<string | null>(null)
 const docConvertBusyId = ref<string | null>(null)
 const pendingAttachments = ref<AttachmentChip[]>([])
 const voiceRecording = ref(false)
@@ -74,10 +72,6 @@ function isAssistantStreaming(m: ChatMessage) {
   return m.role === 'ASSISTANT' && m.content.length === 0 && chat.sending
 }
 
-function isAssistantStreamActive(m: ChatMessage) {
-  return m.role === 'ASSISTANT' && chat.sending && streamingAssistantId.value === m.id
-}
-
 function showUserToolbar(idx: number, m: ChatMessage) {
   if (m.role !== 'USER') return false
   if (chat.sending && isLastMessage(idx)) return false
@@ -87,8 +81,7 @@ function showUserToolbar(idx: number, m: ChatMessage) {
 
 function showAiToolbar(idx: number, m: ChatMessage) {
   if (m.role !== 'ASSISTANT') return false
-  if (chat.sending) return false
-  if (isAssistantStreaming(m) || isAssistantStreamActive(m)) return false
+  if (isAssistantStreaming(m)) return false
   return isLastMessage(idx) || !!hoveringRow[m.id]
 }
 
@@ -159,7 +152,6 @@ watch(
   () => {
     editingUserId.value = null
     followUpQuestions.value = []
-    streamingAssistantId.value = null
     void scrollToBottom(false)
     void nextTick(() => updateScrollBottomState())
   },
@@ -379,7 +371,6 @@ function runStream(
     metadata: null,
   }
   streamTargetMessageId = assistantPlaceholder.id
-  streamingAssistantId.value = assistantPlaceholder.id
   followUpQuestions.value = []
   chat.messages = [...chat.messages, assistantPlaceholder]
 
@@ -393,7 +384,6 @@ function runStream(
         streamBuffer = ''
         streamShown = 0
         streamTargetMessageId = id
-        streamingAssistantId.value = id
         chat.messages = chat.messages.map((m) =>
           m.id === assistantPlaceholder.id ? { ...m, id } : m,
         )
@@ -405,7 +395,6 @@ function runStream(
       async onDone() {
         stopTypewriter()
         flushStreamVisual()
-        streamingAssistantId.value = null
         await chat.fetchMessages(sid)
         await chat.fetchSessions()
         syncUserEditsFromMessages()
@@ -416,7 +405,6 @@ function runStream(
     .catch((e: unknown) => {
       stopTypewriter()
       flushStreamVisual()
-      streamingAssistantId.value = null
       if ((e as Error).name === 'AbortError') {
         ElMessage.info(t('errors.stopped'))
       } else {
@@ -427,10 +415,19 @@ function runStream(
 }
 
 async function onSend() {
-  const sid = chat.activeSessionId
+  let sid = chat.activeSessionId
+  if (!sid) {
+    try {
+      const s = await chat.createSession()
+      sid = s.id
+    } catch (e) {
+      ElMessage.error((e as Error).message || t('errors.createSession'))
+      return
+    }
+  }
   const text = chat.inputDraft.trim()
   const hasCtx = pendingAttachments.value.length > 0
-  if (!sid || chat.sending) return
+  if (chat.sending) return
   if (!text && !hasCtx) return
 
   const ctxJson = buildModelContextJson()
@@ -670,9 +667,9 @@ function askFollowUp(q: string) {
       :class="{ 'msg-scroll--jump': showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding }"
       @scroll.passive="onMsgScroll"
     >
-      <div v-if="!chat.activeSessionId" class="empty">
-        <h2>{{ t('chat.emptyTitle') }}</h2>
-        <p>{{ t('chat.emptyHint') }}</p>
+      <div v-if="!chat.activeSessionId" class="empty empty--draft">
+        <h2>{{ t('chat.draftTitle') }}</h2>
+        <p>{{ t('chat.draftHint') }}</p>
       </div>
       <div v-else-if="chat.loadingMessages" class="muted center">{{ t('chat.loadingMessages') }}</div>
       <div v-else-if="showLanding" class="landing">
@@ -788,11 +785,7 @@ function askFollowUp(q: string) {
               <div v-else class="prose-ai" v-html="md(m.content)" />
             </div>
 
-            <div
-              v-if="m.role === 'ASSISTANT' && docMeta(m)"
-              class="ai-toolbar-slot"
-              :class="{ 'ai-toolbar-slot--streaming': chat.sending && isLastMessage(idx) }"
-            >
+            <div v-if="m.role === 'ASSISTANT' && docMeta(m)" class="ai-toolbar-slot">
               <div class="ai-toolbar" :class="{ 'ai-toolbar--visible': showAiToolbar(idx, m) }">
                 <el-tooltip hide-after="0" :content="t('chat.copy')" placement="top">
                   <el-button text circle class="msg-toolbar-btn" @click="copyText(docMeta(m)!.markdownBody)">
@@ -877,7 +870,6 @@ function askFollowUp(q: string) {
             </div>
 
             <div v-if="showInlineFollowUps(idx, m)" class="follow-up-inline">
-              <span class="follow-up-inline-title">{{ t('chat.followUpTitle') }}</span>
               <div class="follow-up-inline-chips">
                 <button
                   v-for="(q, i) in followUpQuestions"
@@ -941,14 +933,14 @@ function askFollowUp(q: string) {
           resize="none"
           class="composer-input"
           :placeholder="t('chat.inputPlaceholder')"
-          :disabled="!chat.activeSessionId || uploadBusy || voiceRecording"
+          :disabled="uploadBusy || voiceRecording"
           @keydown="onKeydown"
         />
         <el-tooltip hide-after="0" :content="t('chat.uploadImage')" placement="top">
           <el-button
             class="image-fab"
             circle
-            :disabled="!chat.activeSessionId || chat.sending || uploadBusy"
+            :disabled="chat.sending || uploadBusy"
             @click="openImagePicker"
           >
             <el-icon class="fab-icon"><Picture /></el-icon>
@@ -959,7 +951,7 @@ function askFollowUp(q: string) {
             class="mic-fab"
             circle
             :type="voiceRecording ? 'danger' : 'default'"
-            :disabled="!chat.activeSessionId || chat.sending || uploadBusy"
+            :disabled="chat.sending || uploadBusy"
             @click="toggleVoice"
           >
             <el-icon class="fab-icon"><Microphone /></el-icon>
@@ -969,7 +961,7 @@ function askFollowUp(q: string) {
           <el-button
             class="attach-fab"
             circle
-            :disabled="!chat.activeSessionId || chat.sending || uploadBusy"
+            :disabled="chat.sending || uploadBusy"
             :loading="uploadBusy"
             @click="openFilePicker"
           >
@@ -982,7 +974,6 @@ function askFollowUp(q: string) {
             type="primary"
             circle
             :disabled="
-              !chat.activeSessionId ||
               (!chat.sending && !chat.inputDraft.trim() && pendingAttachments.length === 0) ||
               uploadBusy ||
               voiceRecording
@@ -1184,14 +1175,6 @@ function askFollowUp(q: string) {
   max-width: min(640px, 100%);
 }
 
-.follow-up-inline-title {
-  display: block;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-muted);
-  margin-bottom: 8px;
-}
-
 .follow-up-inline-chips {
   display: flex;
   flex-direction: column;
@@ -1208,9 +1191,9 @@ function askFollowUp(q: string) {
   max-width: 100%;
   box-sizing: border-box;
   text-align: left;
-  padding: 10px 14px;
+  padding: 5px 12px;
   border-radius: 12px;
-  border: 1px solid var(--border-subtle);
+  border: none;
   background: var(--bg-input-fill);
   color: var(--text-primary);
   font: inherit;
@@ -1226,8 +1209,8 @@ function askFollowUp(q: string) {
 }
 
 .follow-chip:hover:not(:disabled) {
-  border-color: var(--accent-soft);
-  box-shadow: 0 4px 14px rgba(59, 108, 255, 0.1);
+  background: var(--bg-elevated);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
 }
 
 .follow-chip:disabled {
