@@ -1,5 +1,5 @@
 import { http } from './http'
-import type { ChatMessage, SessionSummary } from './types'
+import type { ChatMessage, ExtractedAttachment, SessionSummary } from './types'
 
 export async function listSessions(): Promise<SessionSummary[]> {
   const { data } = await http.get<SessionSummary[]>('/api/sessions')
@@ -24,7 +24,36 @@ export async function listMessages(sessionId: string): Promise<ChatMessage[]> {
   return data
 }
 
-export type ExtractedAttachment = { fileName: string; text: string }
+export async function convertToDocument(sessionId: string, sourceAssistantMessageId: string): Promise<ChatMessage> {
+  const { data } = await http.post<ChatMessage>('/api/chat/document/convert', {
+    sessionId,
+    sourceAssistantMessageId,
+  })
+  return data
+}
+
+export async function updateDocumentMessage(
+  sessionId: string,
+  messageId: string,
+  markdownBody: string,
+): Promise<ChatMessage> {
+  const { data } = await http.post<ChatMessage>('/api/chat/document/update', {
+    sessionId,
+    messageId,
+    markdownBody,
+  })
+  return data
+}
+
+export async function freezeDocumentMessage(sessionId: string, messageId: string): Promise<ChatMessage> {
+  const { data } = await http.post<ChatMessage>('/api/chat/document/freeze', { sessionId, messageId })
+  return data
+}
+
+export async function fetchFollowUpQuestions(sessionId: string): Promise<string[]> {
+  const { data } = await http.post<{ questions: string[] }>('/api/chat/suggestions', { sessionId })
+  return data.questions ?? []
+}
 
 export async function extractAttachmentText(file: File): Promise<ExtractedAttachment> {
   const form = new FormData()

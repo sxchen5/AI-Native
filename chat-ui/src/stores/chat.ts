@@ -77,8 +77,10 @@ export const useChatStore = defineStore('chat', () => {
     activeSessionId.value = sessionId
   }
 
-  function updateAssistantMessageContent(messageId: string, content: string) {
-    messages.value = messages.value.map((m) => (m.id === messageId ? { ...m, content } : m))
+  function updateAssistantMessageContent(messageId: string, content: string, metadata?: string | null) {
+    messages.value = messages.value.map((m) =>
+      m.id === messageId ? { ...m, content, ...(metadata !== undefined ? { metadata } : {}) } : m,
+    )
   }
 
   async function deleteSession(sessionId: string) {
@@ -105,6 +107,7 @@ export const useChatStore = defineStore('chat', () => {
     content: string,
     opts: {
       restartFromUserMessageId?: string | null
+      appendAfterUserMessageId?: string | null
       onStart: (assistantMessageId: string) => void
       onDelta: (chunk: string) => void
       onDone: () => void
@@ -117,6 +120,9 @@ export const useChatStore = defineStore('chat', () => {
     const body: Record<string, unknown> = { sessionId, content }
     if (opts.restartFromUserMessageId) {
       body.restartFromUserMessageId = opts.restartFromUserMessageId
+    }
+    if (opts.appendAfterUserMessageId) {
+      body.appendAfterUserMessageId = opts.appendAfterUserMessageId
     }
 
     try {

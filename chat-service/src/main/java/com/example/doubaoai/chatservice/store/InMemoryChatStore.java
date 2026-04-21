@@ -58,12 +58,28 @@ public class InMemoryChatStore {
     }
 
     public StoredMessage appendUserMessage(String sessionId, String content) {
+        return appendUserMessage(sessionId, content, null);
+    }
+
+    public StoredMessage appendUserMessage(String sessionId, String content, String metadata) {
         ChatSession session = sessions.get(sessionId);
         if (session == null) {
             throw new IllegalArgumentException("会话不存在");
         }
         String messageId = UUID.randomUUID().toString().replace("-", "");
-        StoredMessage message = new StoredMessage(messageId, ChatRole.USER, content, Instant.now());
+        StoredMessage message = new StoredMessage(messageId, ChatRole.USER, content, Instant.now(), metadata);
+        session.addMessage(message);
+        return message;
+    }
+
+    /** 追加一条已带正文的助手消息（如文档卡片）。 */
+    public StoredMessage appendAssistantMessage(String sessionId, String content, String metadata) {
+        ChatSession session = sessions.get(sessionId);
+        if (session == null) {
+            throw new IllegalArgumentException("会话不存在");
+        }
+        String messageId = UUID.randomUUID().toString().replace("-", "");
+        StoredMessage message = new StoredMessage(messageId, ChatRole.ASSISTANT, content, Instant.now(), metadata);
         session.addMessage(message);
         return message;
     }
@@ -74,7 +90,7 @@ public class InMemoryChatStore {
             throw new IllegalArgumentException("会话不存在");
         }
         String messageId = UUID.randomUUID().toString().replace("-", "");
-        StoredMessage message = new StoredMessage(messageId, ChatRole.ASSISTANT, "", Instant.now());
+        StoredMessage message = new StoredMessage(messageId, ChatRole.ASSISTANT, "", Instant.now(), null);
         session.addMessage(message);
         return message;
     }
@@ -99,7 +115,7 @@ public class InMemoryChatStore {
             throw new IllegalArgumentException("内容不能为空");
         }
         session.replaceMessage(userMessageId,
-                new StoredMessage(old.id(), ChatRole.USER, newContent.strip(), old.createdAt()));
+                new StoredMessage(old.id(), ChatRole.USER, newContent.strip(), old.createdAt(), old.metadata()));
         session.removeMessagesAfter(userMessageId);
     }
 
@@ -125,6 +141,34 @@ public class InMemoryChatStore {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("消息不存在"));
         session.replaceMessage(messageId,
-                new StoredMessage(old.id(), old.role(), fullContent, old.createdAt()));
+                new StoredMessage(old.id(), old.role(), fullContent, old.createdAt(), old.metadata()));
+    }
+
+    public void updateMessageContentAndMetadata(String sessionId, String messageId, String content, String metadata) {
+        ChatSession session = sessions.get(sessionId);
+        if (session == null) {
+            throw new IllegalArgumentException("会话不存在");
+        }
+        List<StoredMessage> snapshot = session.historySnapshot();
+        StoredMessage old = snapshot.stream()
+                .filter(m -> m.id().equals(messageId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("消息不存在"));
+        session.replaceMessage(messageId,
+                new StoredMessage(old.id(), old.role(), content, old.createdAt(), metadata));
+    }
+
+    public void updateMessageMetadata(String sessionId, String messageId, String metadata) {
+        ChatSession session = sessions.get(sessionId);
+        if (session == null) {
+            throw new IllegalArgumentException("会话不存在");
+        }
+        List<StoredMessage> snapshot = session.historySnapshot();
+        StoredMessage old = snapshot.stream()
+                .filter(m -> m.id().equals(messageId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("消息不存在"));
+        session.replaceMessage(messageId,
+                new StoredMessage(old.id(), old.role(), old.content(), old.createdAt(), metadata));
     }
 }

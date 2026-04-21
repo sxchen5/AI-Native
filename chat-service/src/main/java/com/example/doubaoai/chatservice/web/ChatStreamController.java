@@ -59,10 +59,57 @@ public class ChatStreamController {
         }
 
         final String restartId = request.restartFromUserMessageId();
+        final String appendAfterId = request.appendAfterUserMessageId();
         final String rawContent = request.content() == null ? "" : request.content();
         final String userText;
+        final boolean appendMode = appendAfterId != null && !appendAfterId.isBlank();
 
-        if (restartId != null && !restartId.isBlank()) {
+        if (appendMode) {
+            if (restartId != null && !restartId.isBlank()) {
+                try {
+                    emitter.send(SseEmitter.event()
+                            .data(objectMapper.writeValueAsString(SseEventDto.error("不能同时使用重新发送与追加模式"))));
+                }
+                catch (IOException ignored) {
+                    // ignore
+                }
+                emitter.complete();
+                return emitter;
+            }
+            List<StoredMessage> snap = session.historySnapshot();
+            StoredMessage anchor = snap.stream()
+                    .filter(m -> m.id().equals(appendAfterId))
+                    .findFirst()
+                    .orElse(null);
+            if (anchor == null || anchor.role() != ChatRole.USER) {
+                try {
+                    emitter.send(SseEmitter.event()
+                            .data(objectMapper.writeValueAsString(SseEventDto.error("锚点用户消息不存在"))));
+                }
+                catch (IOException ignored) {
+                    // ignore
+                }
+                emitter.complete();
+                return emitter;
+            }
+            userText = rawContent.strip();
+            if (userText.isEmpty()) {
+                userText = anchor.content() == null ? "" : anchor.content();
+            }
+            if (userText.isBlank()) {
+                try {
+                    emitter.send(SseEmitter.event()
+                            .data(objectMapper.writeValueAsString(SseEventDto.error("内容不能为空"))));
+                }
+                catch (IOException ignored) {
+                    // ignore
+                }
+                emitter.complete();
+                return emitter;
+            }
+            store.appendUserMessage(request.sessionId(), userText, anchor.metadata());
+        }
+        else if (restartId != null && !restartId.isBlank()) {
             List<StoredMessage> snap = session.historySnapshot();
             StoredMessage userMsg = snap.stream()
                     .filter(m -> m.id().equals(restartId))
@@ -103,10 +150,20 @@ public class ChatStreamController {
         }
         var assistantPlaceholder = store.appendAssistantPlaceholder(request.sessionId());
 
-        List<StoredMessage> historyBefore = new ArrayList<>(session.historySnapshot());
-        int n = historyBefore.size();
-        if (n >= 2) {
-            historyBefore.subList(n - 2, n).clear();
+        List<StoredMessage> historyBefore;
+        if (appendMode) {
+            historyBefore = new ArrayList<>(session.historySnapshot());
+            int n = historyBefore.size();
+            if (n >= 2) {
+                historyBefore = new ArrayList<>(historyBefore.subList(0, n - 2));
+            }
+        }
+        else {
+            historyBefore = new ArrayList<>(session.historySnapshot());
+            int n = historyBefore.size();
+            if (n >= 2) {
+                historyBefore.subList(n - 2, n).clear();
+            }
         }
 
         StringBuilder full = new StringBuilder();
@@ -120,7 +177,7 @@ public class ChatStreamController {
             return emitter;
         }
 
-        Disposable sub = aiStreamService.streamReply(historyBefore, userText)
+        Disposable sub = (appendMode ? aiStreamService.streamReplyAppend(historyBefore, userText) : aiStreamService.streamReply(historyBefore, userText))
                 .subscribe(chunk -> {
                     if (chunk == null || chunk.isEmpty()) {
                         return;

@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import ChatWorkspace from './ChatWorkspace.vue'
+import * as chatApi from '../api/chatApi'
 import { useChatStore } from '../stores/chat'
 import { useUiStore } from '../stores/ui'
 import { extractMarkdownToc, firstMarkdownTitle } from '../utils/canvasOutline'
@@ -32,6 +33,7 @@ const shellRef = ref<HTMLElement | null>(null)
 const chatPaneWidthPx = ref(420)
 
 const messageId = computed(() => (typeof route.query.messageId === 'string' ? route.query.messageId : null))
+const readOnlyCanvas = computed(() => route.query.readOnly === '1' || route.query.readOnly === 'true')
 const canvasDraft = ref('')
 const lastModified = ref<Date | null>(null)
 const tocCollapsed = ref(false)
@@ -66,12 +68,23 @@ function syncDraftFromStore() {
   lastModified.value = new Date()
 }
 
-function applyToMessage() {
+async function applyToMessage() {
   const id = messageId.value
-  if (!id) return
-  chat.updateAssistantMessageContent(id, canvasDraft.value)
-  touchModified()
-  ElMessage.success(t('chat.canvasApplied'))
+  const sid = chat.activeSessionId
+  if (!id || !sid) return
+  try {
+    const updated = await chatApi.updateDocumentMessage(sid, id, canvasDraft.value)
+    chat.messages = chat.messages.map((m) =>
+      m.id === id ? { ...m, content: updated.content, metadata: updated.metadata } : m,
+    )
+    await chatApi.freezeDocumentMessage(sid, id)
+    await chat.fetchMessages(sid)
+    touchModified()
+    ElMessage.success(t('chat.canvasApplied'))
+    void router.push({ name: 'chat' })
+  } catch (e) {
+    ElMessage.error((e as Error).message || t('chat.uploadFail'))
+  }
 }
 
 function goBack() {
@@ -264,6 +277,7 @@ watch(
               type="textarea"
               class="md-editor"
               :placeholder="t('chat.canvasHint')"
+              :disabled="readOnlyCanvas"
               @input="touchModified"
             />
           </div>
@@ -281,7 +295,7 @@ watch(
 
       <footer v-if="messageId" class="editor-footer">
         <el-button @click="goBack">{{ t('canvas.backToChat') }}</el-button>
-        <el-button type="primary" @click="applyToMessage">{{ t('chat.canvasApply') }}</el-button>
+        <el-button v-if="!readOnlyCanvas" type="primary" @click="applyToMessage">{{ t('chat.canvasApply') }}</el-button>
       </footer>
     </aside>
   </div>

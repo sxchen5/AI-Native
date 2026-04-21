@@ -4,12 +4,14 @@ import {
   CircleClose,
   Close,
   DocumentCopy,
+  Download,
   Edit,
   EditPen,
   Loading,
   Microphone,
   Paperclip,
   Promotion,
+  TopRight,
 } from '@element-plus/icons-vue'
 import { FullScreen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -18,12 +20,13 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import * as chatApi from '../api/chatApi'
-import type { ChatMessage } from '../api/types'
+import type { ChatMessage, DocumentCardMeta } from '../api/types'
 import { useChatStore } from '../stores/chat'
 import { renderAiMarkdown } from '../utils/markdown'
 import { markdownToPlainText } from '../utils/plainText'
 import IconThumbDown from './icons/IconThumbDown.vue'
 import IconThumbUp from './icons/IconThumbUp.vue'
+import { parseDocumentMeta } from '../utils/documentMeta'
 
 const { t, tm } = useI18n()
 const router = useRouter()
@@ -44,6 +47,8 @@ const hoveringRow = reactive<Record<string, boolean>>({})
 const editingUserId = ref<string | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const uploadBusy = ref(false)
+const followUpQuestions = ref<string[]>([])
+const docConvertBusyId = ref<string | null>(null)
 
 function md(html: string) {
   return renderAiMarkdown(html)
@@ -127,6 +132,7 @@ watch(
   () => chat.activeSessionId,
   () => {
     editingUserId.value = null
+    followUpQuestions.value = []
     void scrollToBottom(false)
     void nextTick(() => updateScrollBottomState())
   },
@@ -135,7 +141,17 @@ watch(
 watch(
   () => chat.loadingMessages,
   (v) => {
-    if (!v) void nextTick(() => updateScrollBottomState())
+    if (!v) {
+      void nextTick(() => updateScrollBottomState())
+      void loadFollowUps()
+    }
+  },
+)
+
+watch(
+  () => chat.sending,
+  (v, prev) => {
+    if (prev && !v) void loadFollowUps()
   },
 )
 
@@ -169,6 +185,7 @@ function onKeydown(e: KeyboardEvent) {
 function runStream(
   userText: string,
   restartFromUserMessageId: string | undefined,
+  appendAfterUserMessageId: string | undefined,
   afterDone?: () => void,
 ) {
   const sid = chat.activeSessionId!
@@ -180,12 +197,14 @@ function runStream(
     role: 'ASSISTANT',
     content: '',
     createdAt: new Date().toISOString(),
+    metadata: null,
   }
   chat.messages = [...chat.messages, assistantPlaceholder]
 
   return chat
     .sendStream(sid, userText, {
       restartFromUserMessageId: restartFromUserMessageId ?? undefined,
+      appendAfterUserMessageId: appendAfterUserMessageId ?? undefined,
       onStart(id) {
         assistantId = id
         assistantContent = ''
@@ -230,13 +249,14 @@ async function onSend() {
     role: 'USER',
     content: text,
     createdAt: new Date().toISOString(),
+    metadata: null,
   }
   chat.messages = [...chat.messages, userMsg]
   userEdits[userMsg.id] = text
   editingUserId.value = null
   await scrollToBottom(false)
 
-  await runStream(text, undefined)
+  await runStream(text, undefined, undefined)
 }
 
 function startUserEdit(m: ChatMessage) {
@@ -254,16 +274,13 @@ function cancelUserEdit(m: ChatMessage) {
 async function resendUserMessage(userMsgId: string) {
   const sid = chat.activeSessionId
   if (!sid || chat.sending) return
-  const idx = chat.messages.findIndex((m) => m.id === userMsgId)
-  if (idx < 0) return
   const text = (userEdits[userMsgId] ?? '').trim()
   if (!text) {
     ElMessage.warning(t('chat.emptySend'))
     return
   }
   editingUserId.value = null
-  chat.messages = chat.messages.slice(0, idx + 1)
-  await runStream(text, userMsgId)
+  await runStream(text, undefined, userMsgId)
 }
 
 function setFeedback(msgId: string, v: 'up' | 'down') {
@@ -280,8 +297,45 @@ function speakAssistant(text: string) {
   window.speechSynthesis.speak(u)
 }
 
-function openCanvasPage(msg: ChatMessage) {
+function openCanvasEdit(msg: ChatMessage) {
   void router.push({ name: 'canvas', query: { messageId: msg.id } })
+}
+
+function openCanvasReadOnly(msg: ChatMessage) {
+  void router.push({ name: 'canvas', query: { messageId: msg.id, readOnly: '1' } })
+}
+
+async function onConvertToDocument(msg: ChatMessage) {
+  const sid = chat.activeSessionId
+  if (!sid || chat.sending || docConvertBusyId.value) return
+  docConvertBusyId.value = msg.id
+  try {
+    await chatApi.convertToDocument(sid, msg.id)
+    await chat.fetchMessages(sid)
+    await chat.fetchSessions()
+    ElMessage.success(t('chat.docConverted'))
+  } catch (e) {
+    ElMessage.error((e as Error).message || t('chat.docConvertFail'))
+  } finally {
+    docConvertBusyId.value = null
+  }
+}
+
+function docMeta(m: ChatMessage): DocumentCardMeta | null {
+  return parseDocumentMeta(m.metadata ?? undefined)
+}
+
+async function loadFollowUps() {
+  const sid = chat.activeSessionId
+  if (!sid || chat.sending || props.hideThreadHead) {
+    followUpQuestions.value = []
+    return
+  }
+  try {
+    followUpQuestions.value = await chatApi.fetchFollowUpQuestions(sid)
+  } catch {
+    followUpQuestions.value = []
+  }
 }
 
 const suggestionChips = computed(() => {
@@ -331,6 +385,27 @@ async function onFileSelected(e: Event) {
 
 function goFullChat() {
   void router.push({ name: 'chat' })
+}
+
+function docBodyPreview(body: string) {
+  const plain = markdownToPlainText(body || '')
+  if (plain.length <= 280) return plain
+  return `${plain.slice(0, 277)}…`
+}
+
+function downloadDocMarkdown(meta: DocumentCardMeta) {
+  const blob = new Blob([meta.markdownBody], { type: 'text/markdown;charset=utf-8' })
+  const a = document.createElement('a')
+  const safe = (meta.title || 'document').replace(/[/\\?%*:|"<>]/g, '-').slice(0, 80)
+  a.href = URL.createObjectURL(blob)
+  a.download = `${safe}.md`
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+function askFollowUp(q: string) {
+  chat.inputDraft = q
+  void onSend()
 }
 </script>
 
@@ -443,6 +518,24 @@ function goFullChat() {
               </div>
             </div>
 
+            <div v-else-if="docMeta(m)" class="doc-card-wrap">
+              <button type="button" class="doc-card" @click="docMeta(m)?.frozen ? openCanvasReadOnly(m) : openCanvasEdit(m)">
+                <div class="doc-card-grid">
+                  <div class="doc-card-left">
+                    <div class="doc-card-icon" aria-hidden="true">
+                      <el-icon :size="22"><EditPen /></el-icon>
+                    </div>
+                    <div class="doc-card-title">{{ docMeta(m)!.title }}</div>
+                    <div class="doc-card-time">{{ t('chat.docCreated') }} {{ new Date(m.createdAt).toLocaleString() }}</div>
+                  </div>
+                  <div class="doc-card-preview">
+                    <div class="doc-preview-label">{{ t('chat.docPreviewLabel') }}</div>
+                    <div class="doc-preview-body">{{ docBodyPreview(docMeta(m)!.markdownBody) }}</div>
+                  </div>
+                </div>
+              </button>
+            </div>
+
             <div v-else class="ai-content">
               <div v-if="isAssistantStreaming(m)" class="typing">
                 <el-icon class="spin"><Loading /></el-icon>
@@ -452,7 +545,35 @@ function goFullChat() {
             </div>
 
             <div
-              v-if="m.role === 'ASSISTANT'"
+              v-if="m.role === 'ASSISTANT' && docMeta(m)"
+              class="ai-toolbar-slot"
+            >
+              <div class="ai-toolbar" :class="{ 'ai-toolbar--visible': showAiToolbar(idx, m) }">
+                <el-tooltip :content="t('chat.copy')" placement="top">
+                  <el-button text circle class="msg-toolbar-btn" @click="copyText(docMeta(m)!.markdownBody)">
+                    <el-icon><DocumentCopy /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip :content="t('chat.downloadDoc')" placement="top">
+                  <el-button text circle class="msg-toolbar-btn" @click="downloadDocMarkdown(docMeta(m)!)">
+                    <el-icon><Download /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip :content="docMeta(m)!.frozen ? t('chat.openDocView') : t('chat.openDocEdit')" placement="top">
+                  <el-button text circle class="msg-toolbar-btn" @click="docMeta(m)!.frozen ? openCanvasReadOnly(m) : openCanvasEdit(m)">
+                    <el-icon><TopRight /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip :content="t('chat.speak')" placement="top">
+                  <el-button text circle class="msg-toolbar-btn" @click="speakAssistant(docMeta(m)!.markdownBody)">
+                    <el-icon><Microphone /></el-icon>
+                  </el-button>
+                </el-tooltip>
+              </div>
+            </div>
+
+            <div
+              v-else-if="m.role === 'ASSISTANT'"
               class="ai-toolbar-slot"
               :class="{ 'ai-toolbar-slot--streaming': isAssistantStreaming(m) }"
             >
@@ -494,7 +615,14 @@ function goFullChat() {
                   </el-button>
                 </el-tooltip>
                 <el-tooltip :content="t('chat.toCanvas')" placement="top">
-                  <el-button text circle class="msg-toolbar-btn" @click="openCanvasPage(m)">
+                  <el-button
+                    text
+                    circle
+                    class="msg-toolbar-btn"
+                    :loading="docConvertBusyId === m.id"
+                    :disabled="!!docConvertBusyId || chat.sending"
+                    @click="onConvertToDocument(m)"
+                  >
                     <el-icon><EditPen /></el-icon>
                   </el-button>
                 </el-tooltip>
@@ -503,6 +631,34 @@ function goFullChat() {
           </div>
         </div>
         <div ref="bottomAnchor" class="anchor" />
+      </div>
+    </div>
+
+    <div
+      v-if="
+        followUpQuestions.length > 0 &&
+        chat.activeSessionId &&
+        !chat.loadingMessages &&
+        !showLanding &&
+        !props.hideThreadHead
+      "
+      class="follow-up-bar"
+    >
+      <div class="follow-up-inner">
+        <span class="follow-up-title">{{ t('chat.followUpTitle') }}</span>
+        <div class="follow-up-chips">
+          <button
+            v-for="(q, i) in followUpQuestions"
+            :key="i"
+            type="button"
+            class="follow-chip"
+            :disabled="chat.sending"
+            @click="askFollowUp(q)"
+          >
+            <span class="follow-chip-text">{{ q }}</span>
+            <span class="follow-chip-arrow" aria-hidden="true">→</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -565,8 +721,8 @@ function goFullChat() {
 
 <style scoped>
 .main {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
   background: var(--bg-chat-surface);
@@ -702,12 +858,181 @@ function goFullChat() {
 }
 
 .msg-scroll {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   scroll-behavior: smooth;
   padding: 20px 16px 12px;
-  min-height: 0;
   background: var(--bg-chat-surface);
+}
+
+.follow-up-bar {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-chat-surface);
+  padding: 10px 16px 12px;
+}
+
+.follow-up-inner {
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+.follow-up-title {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.follow-up-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.follow-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-input-fill);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.follow-chip:hover:not(:disabled) {
+  border-color: var(--accent-soft);
+  box-shadow: 0 4px 14px rgba(59, 108, 255, 0.1);
+}
+
+.follow-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.follow-chip-text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.45;
+}
+
+.follow-chip-arrow {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 16px;
+}
+
+.doc-card-wrap {
+  width: 100%;
+  max-width: min(640px, 100%);
+}
+
+.doc-card {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(59, 108, 255, 0.04) 0%, var(--bg-elevated) 40%);
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.doc-card:hover {
+  border-color: var(--accent-soft);
+  box-shadow: var(--shadow-md);
+}
+
+.doc-card-grid {
+  display: grid;
+  grid-template-columns: 1fr minmax(120px, 38%);
+  gap: 0;
+  min-height: 120px;
+}
+
+.doc-card-left {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.doc-card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+}
+
+.doc-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.doc-card-time {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.doc-card-preview {
+  border-left: 1px solid var(--border-subtle);
+  padding: 12px 12px 12px 14px;
+  background: var(--bg-elevated);
+  border-radius: 0 14px 14px 0;
+  min-width: 0;
+}
+
+.doc-preview-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.doc-preview-body {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  max-height: 88px;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 640px) {
+  .doc-card-grid {
+    grid-template-columns: 1fr;
+  }
+  .doc-card-preview {
+    border-left: none;
+    border-top: 1px solid var(--border-subtle);
+    border-radius: 0 0 14px 14px;
+  }
 }
 
 .jump-wrap {

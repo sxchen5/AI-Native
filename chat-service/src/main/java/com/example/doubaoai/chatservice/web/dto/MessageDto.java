@@ -8,5 +8,6 @@ public record MessageDto(
         String id,
         ChatRole role,
         String content,
-        Instant createdAt) {
+        Instant createdAt,
+        String metadata) {
 }

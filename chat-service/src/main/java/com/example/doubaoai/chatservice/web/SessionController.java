@@ -71,7 +71,7 @@ public class SessionController {
     public ResponseEntity<List<MessageDto>> messages(@PathVariable String sessionId) {
         return store.find(sessionId)
                 .map(s -> s.messagesView().stream()
-                        .map(m -> new MessageDto(m.id(), m.role(), m.content(), m.createdAt()))
+                        .map(m -> new MessageDto(m.id(), m.role(), m.content(), m.createdAt(), m.metadata()))
                         .toList())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
