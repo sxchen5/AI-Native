@@ -317,7 +317,7 @@ watch(
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--bg-chat-surface);
 }
 
 .canvas-resizer {
@@ -341,7 +341,7 @@ watch(
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--bg-elevated);
 }
 
 .doc-toolbar {
@@ -352,7 +352,7 @@ watch(
   padding: 10px 16px;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
-  background: #fff;
+  background: var(--bg-elevated);
 }
 
 .doc-toolbar-left {
@@ -404,7 +404,7 @@ watch(
   flex-direction: row;
   flex-shrink: 0;
   border-right: 1px solid var(--border-subtle);
-  background: #fafafa;
+  background: var(--bg-sidebar);
   transition: width 0.25s var(--ease-out, ease);
 }
 
@@ -531,7 +531,7 @@ watch(
   font-weight: 600;
   color: var(--text-muted);
   border-bottom: 1px solid var(--border-subtle);
-  background: #fcfcfc;
+  background: var(--bg-input-fill);
 }
 
 .md-editor {
@@ -586,7 +586,7 @@ watch(
   gap: 10px;
   padding: 10px 16px;
   border-top: 1px solid var(--border-subtle);
-  background: #fafafa;
+  background: var(--bg-sidebar);
 }
 
 .editor-empty {

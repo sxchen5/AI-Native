@@ -8,6 +8,7 @@ import {
   EditPen,
   Delete,
   MoreFilled,
+  Setting,
   SwitchButton,
   Moon,
   Sunny,
@@ -180,6 +181,7 @@ async function onLogout() {
           <el-icon :size="18"><component :is="userAvatarIcon" /></el-icon>
         </span>
         <span class="user-name">{{ auth.username || '—' }}</span>
+        <el-icon class="user-settings-icon"><Setting /></el-icon>
       </button>
     </div>
     <div v-show="ui.sidebarCollapsedEffective" class="sidebar-footer mini">
@@ -245,7 +247,7 @@ async function onLogout() {
 .sidebar {
   display: flex;
   flex-direction: column;
-  background: #f9f9f9;
+  background: var(--bg-sidebar);
   border-right: 1px solid var(--border-subtle);
   transition:
     width 0.32s cubic-bezier(0.22, 1, 0.36, 1),
@@ -312,7 +314,7 @@ async function onLogout() {
 .fold-btn {
   flex-shrink: 0;
   border: 1px solid var(--border-subtle);
-  background: #fff;
+  background: var(--bg-elevated);
   color: var(--text-secondary);
 }
 
@@ -351,7 +353,7 @@ async function onLogout() {
   padding: 10px 10px;
   border-radius: 10px;
   border: 1px solid transparent;
-  background: #fff;
+  background: var(--bg-elevated);
   cursor: pointer;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   transition:
@@ -395,7 +397,7 @@ async function onLogout() {
 .sidebar-footer {
   border-top: 1px solid var(--border-subtle);
   padding: 10px 10px 12px;
-  background: #f9f9f9;
+  background: var(--bg-sidebar);
 }
 .sidebar-footer.mini {
   display: flex;
@@ -411,7 +413,7 @@ async function onLogout() {
   padding: 8px 10px;
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
-  background: #fff;
+  background: var(--bg-elevated);
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -440,6 +442,12 @@ async function onLogout() {
   white-space: nowrap;
   flex: 1;
   min-width: 0;
+}
+
+.user-settings-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 18px;
 }
 
 .settings-hint {

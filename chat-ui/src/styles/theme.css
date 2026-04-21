@@ -18,7 +18,9 @@ html:not(.dark) {
   --bg-elevated: #ffffff;
   /* 产品要求：侧栏 #f9f9f9、主聊天区白底、输入区 #f5f5f5 */
   --bg-sidebar: #f9f9f9;
+  --bg-shell: #ffffff;
   --bg-chat-panel: #ffffff;
+  --bg-chat-surface: #ffffff;
   --bg-input-fill: #f5f5f5;
   --bg-bubble-user: linear-gradient(135deg, #3b6cff 0%, #5b8cff 100%);
   --bg-bubble-ai: #ffffff;
@@ -42,18 +44,19 @@ html.dark {
   --bg-app: #0c0f14;
   --bg-elevated: #141922;
   --bg-sidebar: #10141c;
-  /* 聊天主区保持白底，文字用浅色页上的深色字，避免与深色变量冲突 */
-  --bg-chat-panel: #ffffff;
-  --bg-input-fill: #f0f2f7;
+  --bg-shell: #0c0f14;
+  --bg-chat-panel: #141922;
+  --bg-chat-surface: #141922;
+  --bg-input-fill: #1e2433;
   --bg-bubble-user: linear-gradient(135deg, #4f7dff 0%, #7aa2ff 100%);
   --bg-bubble-ai: #1a2130;
-  --border-subtle: rgba(15, 23, 42, 0.1);
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
+  --border-subtle: rgba(148, 163, 184, 0.14);
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
   --text-muted: #64748b;
-  --accent: #3b6cff;
-  --accent-soft: rgba(59, 108, 255, 0.14);
-  --code-bg: #f1f5f9;
+  --accent: #7aa2ff;
+  --accent-soft: rgba(122, 162, 255, 0.18);
+  --code-bg: #0f172a;
   --login-page-bg: linear-gradient(160deg, #1a2234 0%, #121826 45%, #0c0f14 100%);
   --login-card-bg: #141922;
   --login-card-border: rgba(148, 163, 184, 0.14);

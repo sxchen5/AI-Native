@@ -47,7 +47,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: #ffffff;
+  background: var(--bg-shell);
 }
 
 .body {
@@ -81,6 +81,6 @@ onMounted(async () => {
 .chat-pane {
   min-width: 0;
   min-height: 0;
-  background: #ffffff;
+  background: var(--bg-chat-surface);
 }
 </style>

@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import {
-  CircleCheck,
-  CircleCheckFilled,
+  ArrowDown,
   CircleClose,
-  CircleCloseFilled,
   Close,
   DocumentCopy,
   Edit,
@@ -22,7 +20,8 @@ import type { ChatMessage } from '../api/types'
 import { useChatStore } from '../stores/chat'
 import { renderAiMarkdown } from '../utils/markdown'
 import { markdownToPlainText } from '../utils/plainText'
-import { useScrollbarFade } from '../utils/scrollbarFade'
+import IconThumbDown from './icons/IconThumbDown.vue'
+import IconThumbUp from './icons/IconThumbUp.vue'
 
 const { t, tm } = useI18n()
 const router = useRouter()
@@ -35,7 +34,8 @@ const props = defineProps<{
 
 const bottomAnchor = ref<HTMLElement | null>(null)
 const msgScrollEl = ref<HTMLElement | null>(null)
-const msgScrollFade = useScrollbarFade(msgScrollEl)
+const showJumpToBottom = ref(false)
+let scrollThumbTimer: ReturnType<typeof setTimeout> | null = null
 const userEdits = reactive<Record<string, string>>({})
 const feedback = reactive<Record<string, 'up' | 'down' | null>>({})
 const hoveringRow = reactive<Record<string, boolean>>({})
@@ -80,6 +80,33 @@ function syncUserEditsFromMessages() {
 async function scrollToBottom(smooth = true) {
   await nextTick()
   bottomAnchor.value?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'end' })
+  updateScrollBottomState()
+}
+
+function updateScrollBottomState() {
+  const el = msgScrollEl.value
+  if (!el) {
+    showJumpToBottom.value = false
+    return
+  }
+  const gap = 80
+  showJumpToBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight > gap
+}
+
+function onMsgScroll() {
+  updateScrollBottomState()
+  const el = msgScrollEl.value
+  if (!el) return
+  el.classList.add('u-scroll--active')
+  if (scrollThumbTimer) clearTimeout(scrollThumbTimer)
+  scrollThumbTimer = setTimeout(() => {
+    el.classList.remove('u-scroll--active')
+    scrollThumbTimer = null
+  }, 900)
+}
+
+function jumpToLatest() {
+  void scrollToBottom(true)
 }
 
 watch(
@@ -87,6 +114,7 @@ watch(
   () => {
     syncUserEditsFromMessages()
     void scrollToBottom(true)
+    void nextTick(() => updateScrollBottomState())
   },
   { deep: true, immediate: true },
 )
@@ -96,15 +124,26 @@ watch(
   () => {
     editingUserId.value = null
     void scrollToBottom(false)
+    void nextTick(() => updateScrollBottomState())
+  },
+)
+
+watch(
+  () => chat.loadingMessages,
+  (v) => {
+    if (!v) void nextTick(() => updateScrollBottomState())
   },
 )
 
 onMounted(() => {
-  msgScrollFade.attach()
+  window.addEventListener('resize', updateScrollBottomState, { passive: true })
+  void nextTick(() => updateScrollBottomState())
 })
 
 onBeforeUnmount(() => {
-  msgScrollFade.detach()
+  if (scrollThumbTimer) clearTimeout(scrollThumbTimer)
+  msgScrollEl.value?.classList.remove('u-scroll--active')
+  window.removeEventListener('resize', updateScrollBottomState)
 })
 
 async function copyText(text: string) {
@@ -285,7 +324,7 @@ function goFullChat() {
       </div>
     </header>
 
-    <div ref="msgScrollEl" class="msg-scroll u-scroll">
+    <div ref="msgScrollEl" class="msg-scroll u-scroll" @scroll.passive="onMsgScroll">
       <div v-if="!chat.activeSessionId" class="empty">
         <h2>{{ t('chat.emptyTitle') }}</h2>
         <p>{{ t('chat.emptyHint') }}</p>
@@ -400,7 +439,9 @@ function goFullChat() {
                     :type="feedback[m.id] === 'up' ? 'primary' : 'default'"
                     @click="setFeedback(m.id, 'up')"
                   >
-                    <el-icon><CircleCheckFilled v-if="feedback[m.id] === 'up'" /><CircleCheck v-else /></el-icon>
+                    <span class="thumb-wrap" :class="{ muted: feedback[m.id] !== 'up' }">
+                      <IconThumbUp />
+                    </span>
                   </el-button>
                 </el-tooltip>
                 <el-tooltip :content="t('chat.dislike')" placement="top">
@@ -411,7 +452,9 @@ function goFullChat() {
                     :type="feedback[m.id] === 'down' ? 'danger' : 'default'"
                     @click="setFeedback(m.id, 'down')"
                   >
-                    <el-icon><CircleCloseFilled v-if="feedback[m.id] === 'down'" /><CircleClose v-else /></el-icon>
+                    <span class="thumb-wrap" :class="{ muted: feedback[m.id] !== 'down' }">
+                      <IconThumbDown />
+                    </span>
                   </el-button>
                 </el-tooltip>
                 <el-tooltip :content="t('chat.speak')" placement="top">
@@ -433,6 +476,16 @@ function goFullChat() {
     </div>
 
     <footer class="composer">
+      <div
+        v-if="showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding"
+        class="jump-wrap"
+      >
+        <el-tooltip :content="t('chat.jumpToBottom')" placement="top">
+          <el-button class="jump-btn" circle @click="jumpToLatest">
+            <el-icon :size="18"><ArrowDown /></el-icon>
+          </el-button>
+        </el-tooltip>
+      </div>
       <div v-if="chat.activeSessionId" class="quick-row">
         <button type="button" class="quick-pill" @click="fillSuggestion(t('chat.quickTone') + '：更专业')">
           {{ t('chat.quickTone') }}
@@ -478,7 +531,7 @@ function goFullChat() {
   grid-template-rows: auto 1fr auto;
   min-width: 0;
   min-height: 0;
-  background: #ffffff;
+  background: var(--bg-chat-surface);
   transition: background 0.35s ease;
 }
 
@@ -487,9 +540,9 @@ function goFullChat() {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 6px 12px;
   border-bottom: 1px solid var(--border-subtle);
-  background: #ffffff;
+  background: var(--bg-chat-surface);
   flex-shrink: 0;
 }
 
@@ -594,7 +647,7 @@ function goFullChat() {
 
 .quick-pill {
   border: 1px solid var(--border-subtle);
-  background: #fff;
+  background: var(--bg-elevated);
   color: var(--text-secondary);
   font: inherit;
   font-size: 12px;
@@ -611,9 +664,9 @@ function goFullChat() {
 
 .thread-head {
   flex-shrink: 0;
-  padding: 16px 20px 10px;
+  padding: 10px 16px 8px;
   border-bottom: 1px solid var(--border-subtle);
-  background: #ffffff;
+  background: var(--bg-chat-surface);
 }
 
 .thread-head-inner {
@@ -624,7 +677,7 @@ function goFullChat() {
 
 .thread-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text-primary);
@@ -642,7 +695,29 @@ function goFullChat() {
   scroll-behavior: smooth;
   padding: 20px 16px 12px;
   min-height: 0;
-  background: #ffffff;
+  background: var(--bg-chat-surface);
+}
+
+.jump-wrap {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 0 8px;
+  max-width: 880px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+.jump-btn {
+  width: 40px;
+  height: 40px;
+  background: #ffffff !important;
+  border: 1px solid var(--border-subtle) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+}
+html.dark .jump-btn {
+  background: var(--bg-elevated) !important;
+  color: var(--text-primary) !important;
 }
 
 .empty {
@@ -738,6 +813,9 @@ function goFullChat() {
 .user-actions :deep(.el-button--primary) {
   color: var(--accent);
 }
+.user-actions .icon-act :deep(.el-icon) {
+  font-size: 20px;
+}
 
 .ai-content {
   width: 100%;
@@ -759,12 +837,12 @@ function goFullChat() {
 .ai-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 6px;
   align-items: center;
   min-height: 36px;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s ease;
+  gap: 0;
 }
 .ai-toolbar--visible {
   opacity: 1;
@@ -772,13 +850,27 @@ function goFullChat() {
 }
 .ai-toolbar :deep(.el-button) {
   font-size: 12px;
-  padding: 4px 6px;
+  padding: 2px;
+  margin: 0 1px;
 }
 
 .icon-act {
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
   padding: 0;
+}
+.icon-act :deep(.el-icon) {
+  font-size: 20px;
+}
+
+.thumb-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+}
+.thumb-wrap.muted {
+  opacity: 0.45;
 }
 
 .typing {
@@ -829,13 +921,14 @@ function goFullChat() {
 }
 
 .composer {
-  border-top: 1px solid var(--border-subtle);
   background: #ffffff;
   padding: 12px 16px 14px;
-  box-shadow: 0 -4px 24px rgba(15, 23, 42, 0.06);
   transition:
     background 0.35s ease,
     border-color 0.35s ease;
+}
+html.dark .composer {
+  background: var(--bg-chat-surface);
 }
 
 .composer-inner {
@@ -848,7 +941,8 @@ function goFullChat() {
   border-radius: var(--radius-lg, 14px);
   padding: 12px 52px 12px 14px;
   min-height: 88px !important;
-  background: #ffffff !important;
+  background: var(--bg-elevated) !important;
+  color: var(--text-primary);
   border: 1px solid var(--border-subtle);
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
