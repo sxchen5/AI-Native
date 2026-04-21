@@ -82,12 +82,20 @@ public class ChatAiStreamService {
         return messages;
     }
 
+    /**
+     * 非流式短文本（标题、猜你想问等）。部分 OpenAI 兼容网关不支持同步 {@code call()}，会返回
+     * {@code 400: current user api does not support http call}，因此改为与主对话相同的 {@code stream().content()} 再聚合。
+     */
     public Mono<String> generateShortText(String systemPrompt, String userPrompt) {
         Prompt prompt = new Prompt(
                 new SystemMessage(systemPrompt),
                 new UserMessage(userPrompt));
-        return Mono.fromCallable(() -> chatClient.prompt(prompt).call().content())
+        return chatClient.prompt(prompt)
+                .stream()
+                .content()
                 .subscribeOn(Schedulers.boundedElastic())
+                .collectList()
+                .map(parts -> String.join("", parts))
                 .doOnError(e -> log.warn("短文本生成失败: {}", e.toString()))
                 .onErrorReturn("");
     }
