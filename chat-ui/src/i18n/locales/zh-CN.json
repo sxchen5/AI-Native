@@ -17,6 +17,18 @@
     "name": "豆包风格助手",
     "tagline": "Spring AI · 流式对话"
   },
+  "settings": {
+    "title": "设置",
+    "language": "界面语言",
+    "theme": "主题模式"
+  },
+  "canvas": {
+    "title": "画布编辑",
+    "backToChat": "返回纯聊天",
+    "preview": "预览",
+    "markdown": "Markdown",
+    "noMessage": "未找到要编辑的消息，请从聊天中重新打开画布。"
+  },
   "header": {
     "logout": "退出登录",
     "langZh": "中文",
@@ -58,6 +70,8 @@
     "refresh": "刷新",
     "assistant": "助手",
     "copy": "复制",
+    "edit": "编辑",
+    "cancelEdit": "取消编辑",
     "resend": "重新发送",
     "regenerate": "重新生成",
     "speak": "朗读",

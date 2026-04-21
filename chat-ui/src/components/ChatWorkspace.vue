@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
+
+defineProps<{
+  /** 画布分屏内嵌：收紧聊天区顶栏 */
+  compact?: boolean
+}>()
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
-import AppHeader from './AppHeader.vue'
 import ChatMain from './ChatMain.vue'
 import SessionSidebar from './SessionSidebar.vue'
 import { useChatStore } from '../stores/chat'
@@ -16,6 +20,9 @@ const ui = useUiStore()
 onMounted(async () => {
   try {
     await chat.fetchSessions()
+    if (chat.sessions.length === 0) {
+      await chat.createSession()
+    }
     if (chat.activeSessionId) {
       await chat.fetchMessages(chat.activeSessionId)
     }
@@ -27,10 +34,9 @@ onMounted(async () => {
 
 <template>
   <div class="shell">
-    <AppHeader />
-    <div class="body" :class="{ 'sidebar-collapsed': ui.sidebarCollapsed }">
+    <div class="body" :class="{ 'sidebar-collapsed': ui.sidebarCollapsedEffective }">
       <SessionSidebar class="sidebar-pane" />
-      <ChatMain class="chat-pane" />
+      <ChatMain class="chat-pane" :hide-thread-head="compact" />
     </div>
   </div>
 </template>
@@ -41,6 +47,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  background: #ffffff;
 }
 
 .body {
@@ -62,17 +69,18 @@ onMounted(async () => {
     grid-template-rows: auto 1fr;
   }
   .sidebar-pane {
-    max-height: 220px;
+    max-height: 260px;
     border-right: none;
     border-bottom: 1px solid var(--border-subtle);
   }
   .body.sidebar-collapsed .sidebar-pane {
-    max-height: 120px;
+    max-height: 140px;
   }
 }
 
 .chat-pane {
   min-width: 0;
   min-height: 0;
+  background: #ffffff;
 }
 </style>

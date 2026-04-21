@@ -17,6 +17,18 @@
     "name": "Doubao-style Assistant",
     "tagline": "Spring AI · Streaming chat"
   },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "theme": "Theme"
+  },
+  "canvas": {
+    "title": "Canvas",
+    "backToChat": "Chat only",
+    "preview": "Preview",
+    "markdown": "Markdown",
+    "noMessage": "No message to edit. Open canvas again from a reply."
+  },
   "header": {
     "logout": "Sign out",
     "langZh": "中文",
@@ -58,6 +70,8 @@
     "refresh": "Refresh",
     "assistant": "Assistant",
     "copy": "Copy",
+    "edit": "Edit",
+    "cancelEdit": "Cancel",
     "resend": "Resend",
     "regenerate": "Regenerate",
     "speak": "Read aloud",

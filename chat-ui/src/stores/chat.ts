@@ -10,16 +10,6 @@ function t(key: string) {
   return i18n.global.t(key) as string
 }
 
-function isDefaultSessionTitle(title: string) {
-  const s = title?.trim() ?? ''
-  return (
-    s === '' ||
-    s === t('session.defaultTitle') ||
-    /^new chat$/i.test(s) ||
-    /^new conversation$/i.test(s)
-  )
-}
-
 export const useChatStore = defineStore('chat', () => {
   const sessions = ref<SessionSummary[]>([])
   const activeSessionId = ref<string | null>(null)
@@ -32,13 +22,6 @@ export const useChatStore = defineStore('chat', () => {
   let abort: AbortController | null = null
 
   const activeSession = computed(() => sessions.value.find((s) => s.id === activeSessionId.value) ?? null)
-
-  /** 当前为「空的新会话」：默认标题且无消息，禁止再点新建 */
-  const isEmptyNewSession = computed(() => {
-    const s = activeSession.value
-    if (!s || !activeSessionId.value) return false
-    return isDefaultSessionTitle(s.title) && messages.value.length === 0
-  })
 
   async function fetchSessions() {
     loadingSessions.value = true
@@ -80,14 +63,7 @@ export const useChatStore = defineStore('chat', () => {
     await fetchMessages(id)
   }
 
-  /**
-   * 新建会话；若当前已是空的新会话则不再创建。
-   * @returns 新建会话，或 `null` 表示已阻止重复创建
-   */
-  async function createSession(): Promise<SessionSummary | null> {
-    if (isEmptyNewSession.value) {
-      return null
-    }
+  async function createSession(): Promise<SessionSummary> {
     const s = await chatApi.createSession(t('session.defaultTitle'))
     sessions.value = [s, ...sessions.value.filter((x) => x.id !== s.id)]
     activeSessionId.value = s.id
@@ -99,6 +75,10 @@ export const useChatStore = defineStore('chat', () => {
     await chatApi.renameSession(sessionId, title)
     await fetchSessions()
     activeSessionId.value = sessionId
+  }
+
+  function updateAssistantMessageContent(messageId: string, content: string) {
+    messages.value = messages.value.map((m) => (m.id === messageId ? { ...m, content } : m))
   }
 
   async function deleteSession(sessionId: string) {
@@ -174,7 +154,6 @@ export const useChatStore = defineStore('chat', () => {
     sending,
     inputDraft,
     activeSession,
-    isEmptyNewSession,
     fetchSessions,
     fetchMessages,
     setActiveSession,
@@ -182,6 +161,7 @@ export const useChatStore = defineStore('chat', () => {
     createSession,
     renameSession,
     deleteSession,
+    updateAssistantMessageContent,
     stopStream,
     sendStream,
   }

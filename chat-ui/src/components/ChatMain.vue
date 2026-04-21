@@ -2,6 +2,7 @@
 import {
   CircleClose,
   DocumentCopy,
+  Edit,
   EditPen,
   Loading,
   Microphone,
@@ -13,6 +14,7 @@ import {
 import { ElMessage } from 'element-plus'
 import { nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 
 import type { ChatMessage } from '../api/types'
 import { useChatStore } from '../stores/chat'
@@ -20,20 +22,46 @@ import { renderAiMarkdown } from '../utils/markdown'
 import { markdownToPlainText } from '../utils/plainText'
 
 const { t } = useI18n()
+const router = useRouter()
 const chat = useChatStore()
 
-const bottomAnchor = ref<HTMLElement | null>(null)
-/** 用户消息可编辑副本（与列表 id 对齐） */
-const userEdits = reactive<Record<string, string>>({})
-/** 对 AI 消息的点赞/点踩 */
-const feedback = reactive<Record<string, 'up' | 'down' | null>>({})
+const props = defineProps<{
+  /** 内嵌在画布分屏左侧时隐藏会话标题区 */
+  hideThreadHead?: boolean
+}>()
 
-const canvasOpen = ref(false)
-const canvasText = ref('')
-const canvasMessageId = ref<string | null>(null)
+const bottomAnchor = ref<HTMLElement | null>(null)
+const userEdits = reactive<Record<string, string>>({})
+const feedback = reactive<Record<string, 'up' | 'down' | null>>({})
+const hoveringRow = reactive<Record<string, boolean>>({})
+const editingUserId = ref<string | null>(null)
 
 function md(html: string) {
   return renderAiMarkdown(html)
+}
+
+function isLastMessage(idx: number) {
+  return idx === chat.messages.length - 1
+}
+
+function isAssistantStreaming(m: ChatMessage) {
+  return m.role === 'ASSISTANT' && m.content.length === 0 && chat.sending
+}
+
+function showUserToolbar(idx: number, m: ChatMessage) {
+  if (m.role !== 'USER') return false
+  if (editingUserId.value === m.id) return true
+  return isLastMessage(idx) || !!hoveringRow[m.id]
+}
+
+function showAiToolbar(idx: number, m: ChatMessage) {
+  if (m.role !== 'ASSISTANT') return false
+  if (isAssistantStreaming(m)) return false
+  return isLastMessage(idx) || !!hoveringRow[m.id]
+}
+
+function onRowHover(messageId: string, inside: boolean) {
+  hoveringRow[messageId] = inside
 }
 
 function syncUserEditsFromMessages() {
@@ -60,7 +88,10 @@ watch(
 
 watch(
   () => chat.activeSessionId,
-  () => scrollToBottom(false),
+  () => {
+    editingUserId.value = null
+    void scrollToBottom(false)
+  },
 )
 
 async function copyText(text: string) {
@@ -153,9 +184,22 @@ async function onSend() {
   }
   chat.messages = [...chat.messages, userMsg]
   userEdits[userMsg.id] = text
+  editingUserId.value = null
   await scrollToBottom(false)
 
   await runStream(text, undefined)
+}
+
+function startUserEdit(m: ChatMessage) {
+  userEdits[m.id] = m.content
+  editingUserId.value = m.id
+}
+
+function cancelUserEdit(m: ChatMessage) {
+  if (editingUserId.value === m.id) {
+    editingUserId.value = null
+  }
+  userEdits[m.id] = m.content
 }
 
 async function resendUserMessage(userMsgId: string) {
@@ -168,6 +212,7 @@ async function resendUserMessage(userMsgId: string) {
     ElMessage.warning(t('chat.emptySend'))
     return
   }
+  editingUserId.value = null
   chat.messages = chat.messages.slice(0, idx + 1)
   await runStream(text, userMsgId)
 }
@@ -181,7 +226,6 @@ async function regenerateAssistant(assistantIndex: number) {
     return
   }
   const text = (userEdits[prevUser.id] ?? prevUser.content).trim()
-  // 去掉当前 AI 及之后消息；后端会截断并重新生成
   chat.messages = chat.messages.slice(0, assistantIndex)
   await runStream(text, prevUser.id)
 }
@@ -200,25 +244,20 @@ function speakAssistant(text: string) {
   window.speechSynthesis.speak(u)
 }
 
-function openCanvas(msg: ChatMessage) {
-  canvasMessageId.value = msg.id
-  canvasText.value = msg.content
-  canvasOpen.value = true
-}
-
-function applyCanvas() {
-  if (!canvasMessageId.value) return
-  const id = canvasMessageId.value
-  chat.messages = chat.messages.map((m) =>
-    m.id === id ? { ...m, content: canvasText.value } : m,
-  )
-  canvasOpen.value = false
-  ElMessage.success(t('chat.canvasApplied'))
+function openCanvasPage(msg: ChatMessage) {
+  void router.push({ name: 'canvas', query: { messageId: msg.id } })
 }
 </script>
 
 <template>
-  <main class="main">
+  <main class="main" :class="{ 'main--embedded': props.hideThreadHead }">
+    <header v-if="chat.activeSessionId && !props.hideThreadHead" class="thread-head">
+      <div class="thread-head-inner">
+        <h1 class="thread-title">{{ chat.activeSession?.title || t('session.defaultTitle') }}</h1>
+        <p class="thread-sub">{{ t('app.tagline') }}</p>
+      </div>
+    </header>
+
     <div class="msg-scroll">
       <div v-if="!chat.activeSessionId" class="empty">
         <h2>{{ t('chat.emptyTitle') }}</h2>
@@ -231,40 +270,66 @@ function applyCanvas() {
           :key="m.id"
           class="row"
           :class="m.role === 'USER' ? 'end' : 'start'"
+          @mouseenter="onRowHover(m.id, true)"
+          @mouseleave="onRowHover(m.id, false)"
         >
           <div class="msg-animate bubble-wrap" :class="m.role === 'USER' ? 'user' : 'ai'">
             <div v-if="m.role === 'ASSISTANT'" class="ai-label">{{ t('chat.assistant') }}</div>
 
             <div v-if="m.role === 'USER'" class="user-block">
-              <el-input
-                v-model="userEdits[m.id]"
-                type="textarea"
-                :autosize="{ minRows: 1, maxRows: 12 }"
-                resize="none"
-                class="user-input"
-                :disabled="chat.sending"
-              />
-              <div class="user-actions">
-                <el-button text size="small" @click="copyText(userEdits[m.id] || '')">
-                  <el-icon><DocumentCopy /></el-icon>
-                  {{ t('chat.copy') }}
-                </el-button>
-                <el-button text size="small" type="primary" :disabled="chat.sending" @click="resendUserMessage(m.id)">
-                  <el-icon><Promotion /></el-icon>
-                  {{ t('chat.resend') }}
-                </el-button>
+              <template v-if="editingUserId === m.id">
+                <el-input
+                  v-model="userEdits[m.id]"
+                  type="textarea"
+                  :autosize="{ minRows: 1, maxRows: 12 }"
+                  resize="none"
+                  class="user-input"
+                  :disabled="chat.sending"
+                />
+              </template>
+              <div v-else class="user-read">
+                {{ userEdits[m.id] ?? m.content }}
+              </div>
+              <div v-if="showUserToolbar(idx, m)" class="user-actions">
+                <template v-if="editingUserId === m.id">
+                  <el-button text size="small" @click="cancelUserEdit(m)">
+                    {{ t('chat.cancelEdit') }}
+                  </el-button>
+                  <el-button text size="small" @click="copyText(userEdits[m.id] || '')">
+                    <el-icon><DocumentCopy /></el-icon>
+                    {{ t('chat.copy') }}
+                  </el-button>
+                  <el-button text size="small" type="primary" :disabled="chat.sending" @click="resendUserMessage(m.id)">
+                    <el-icon><Promotion /></el-icon>
+                    {{ t('chat.resend') }}
+                  </el-button>
+                </template>
+                <template v-else>
+                  <el-button text size="small" :disabled="chat.sending" @click="startUserEdit(m)">
+                    <el-icon><Edit /></el-icon>
+                    {{ t('chat.edit') }}
+                  </el-button>
+                  <el-button text size="small" @click="copyText(userEdits[m.id] || '')">
+                    <el-icon><DocumentCopy /></el-icon>
+                    {{ t('chat.copy') }}
+                  </el-button>
+                  <el-button text size="small" type="primary" :disabled="chat.sending" @click="resendUserMessage(m.id)">
+                    <el-icon><Promotion /></el-icon>
+                    {{ t('chat.resend') }}
+                  </el-button>
+                </template>
               </div>
             </div>
 
             <div v-else class="ai-content">
-              <div v-if="m.content.length === 0 && chat.sending" class="typing">
+              <div v-if="isAssistantStreaming(m)" class="typing">
                 <el-icon class="spin"><Loading /></el-icon>
                 <span class="dot" /><span class="dot" /><span class="dot" />
               </div>
               <div v-else class="prose-ai" v-html="md(m.content)" />
             </div>
 
-            <div v-if="m.role === 'ASSISTANT'" class="ai-toolbar">
+            <div v-if="showAiToolbar(idx, m)" class="ai-toolbar">
               <el-button text size="small" @click="copyText(m.content)">
                 <el-icon><DocumentCopy /></el-icon>
                 {{ t('chat.copy') }}
@@ -293,7 +358,7 @@ function applyCanvas() {
                 <el-icon><Microphone /></el-icon>
                 {{ t('chat.speak') }}
               </el-button>
-              <el-button text size="small" @click="openCanvas(m)">
+              <el-button text size="small" @click="openCanvasPage(m)">
                 <el-icon><EditPen /></el-icon>
                 {{ t('chat.toCanvas') }}
               </el-button>
@@ -334,25 +399,48 @@ function applyCanvas() {
         </el-tooltip>
       </div>
     </footer>
-
-    <el-dialog v-model="canvasOpen" :title="t('chat.canvasTitle')" width="min(720px, 92vw)" destroy-on-close>
-      <el-input v-model="canvasText" type="textarea" :rows="16" :placeholder="t('chat.canvasHint')" />
-      <template #footer>
-        <el-button @click="canvasOpen = false">{{ t('session.cancel') }}</el-button>
-        <el-button type="primary" @click="applyCanvas">{{ t('chat.canvasApply') }}</el-button>
-      </template>
-    </el-dialog>
   </main>
 </template>
 
 <style scoped>
 .main {
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: auto 1fr auto;
   min-width: 0;
   min-height: 0;
   background: var(--bg-chat-panel);
   transition: background 0.35s ease;
+}
+
+.main.main--embedded {
+  grid-template-rows: 1fr auto;
+}
+
+.thread-head {
+  flex-shrink: 0;
+  padding: 16px 20px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-chat-panel);
+}
+
+.thread-head-inner {
+  max-width: 880px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.thread-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.thread-sub {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .msg-scroll {
@@ -360,6 +448,7 @@ function applyCanvas() {
   overflow-x: hidden;
   scroll-behavior: smooth;
   padding: 20px 16px 12px;
+  min-height: 0;
 }
 
 .empty {
@@ -417,6 +506,19 @@ function applyCanvas() {
 .user-block {
   width: 100%;
 }
+
+.user-read {
+  border-radius: 12px;
+  background: var(--bg-input-fill);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .user-input :deep(.el-textarea__inner) {
   border-radius: 12px;
   background: var(--bg-input-fill) !important;
@@ -431,6 +533,7 @@ function applyCanvas() {
 }
 .user-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   margin-top: 6px;
   justify-content: flex-end;
@@ -535,7 +638,7 @@ function applyCanvas() {
   border-radius: var(--radius-lg, 14px);
   padding: 12px 52px 12px 14px;
   min-height: 88px !important;
-  background: var(--bg-input-fill) !important;
+  background: #ffffff !important;
   border: 1px solid var(--border-subtle);
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }

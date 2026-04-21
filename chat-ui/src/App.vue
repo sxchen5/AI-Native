@@ -3,7 +3,6 @@ import { computed, onBeforeMount } from 'vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import en from 'element-plus/es/locale/lang/en'
 
-import ChatWorkspace from './components/ChatWorkspace.vue'
 import LoginView from './components/LoginView.vue'
 import { useAuthStore } from './stores/auth'
 import { useLocaleStore } from './stores/locale'
@@ -30,7 +29,7 @@ const elementLocale = computed(() => (localeStore.locale === 'en-US' ? en : zhCn
     <div class="root">
       <div v-if="!auth.checked" class="boot" />
       <LoginView v-else-if="!auth.authenticated" />
-      <ChatWorkspace v-else />
+      <router-view v-else />
     </div>
   </el-config-provider>
 </template>
