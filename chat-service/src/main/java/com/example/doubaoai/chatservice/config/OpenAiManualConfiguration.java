@@ -9,7 +9,7 @@ import org.springframework.ai.openaisdk.OpenAiSdkChatModel;
 import org.springframework.ai.openaisdk.setup.OpenAiSdkSetup;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -22,8 +22,25 @@ import io.micrometer.observation.ObservationRegistry;
  * （{@link OpenAiSdkSetup} + {@link OpenAiSdkAutoConfigurationUtil}）。
  */
 @Configuration
-@EnableConfigurationProperties({OpenAiSdkConnectionProperties.class, OpenAiSdkChatProperties.class})
 public class OpenAiManualConfiguration {
+
+    /**
+     * 显式注册配置属性 Bean：项目排除了 {@code OpenAiSdkChatAutoConfiguration} 后，仅依赖
+     * {@code @EnableConfigurationProperties} 在部分环境下会在条件解析阶段触发绑定异常。
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConfigurationProperties(prefix = "spring.ai.openai-sdk")
+    public OpenAiSdkConnectionProperties openAiSdkConnectionProperties() {
+        return new OpenAiSdkConnectionProperties();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConfigurationProperties(prefix = "spring.ai.openai-sdk.chat")
+    public OpenAiSdkChatProperties openAiSdkChatProperties() {
+        return new OpenAiSdkChatProperties();
+    }
 
     @Bean
     @ConditionalOnMissingBean
