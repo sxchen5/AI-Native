@@ -8,6 +8,7 @@ import {
   EditPen,
   Loading,
   Microphone,
+  Paperclip,
   Promotion,
 } from '@element-plus/icons-vue'
 import { FullScreen } from '@element-plus/icons-vue'
@@ -16,6 +17,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
+import * as chatApi from '../api/chatApi'
 import type { ChatMessage } from '../api/types'
 import { useChatStore } from '../stores/chat'
 import { renderAiMarkdown } from '../utils/markdown'
@@ -40,6 +42,8 @@ const userEdits = reactive<Record<string, string>>({})
 const feedback = reactive<Record<string, 'up' | 'down' | null>>({})
 const hoveringRow = reactive<Record<string, boolean>>({})
 const editingUserId = ref<string | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const uploadBusy = ref(false)
 
 function md(html: string) {
   return renderAiMarkdown(html)
@@ -298,6 +302,33 @@ function fillSuggestion(text: string) {
   chat.inputDraft = text
 }
 
+function openFilePicker() {
+  fileInputRef.value?.click()
+}
+
+async function onFileSelected(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.warning(t('errors.fileTooLarge'))
+    return
+  }
+  uploadBusy.value = true
+  try {
+    const { fileName, text } = await chatApi.extractAttachmentText(file)
+    const prefix = t('chat.filePrefix', { name: fileName })
+    const cur = chat.inputDraft
+    chat.inputDraft = cur ? `${cur.trimEnd()}\n\n${prefix}${text}` : `${prefix}${text}`
+    ElMessage.success(t('chat.uploadOk'))
+  } catch (err) {
+    ElMessage.error((err as Error).message || t('chat.uploadFail'))
+  } finally {
+    uploadBusy.value = false
+  }
+}
+
 function goFullChat() {
   void router.push({ name: 'chat' })
 }
@@ -375,12 +406,12 @@ function goFullChat() {
               <div class="user-actions" :class="{ 'user-actions--visible': showUserToolbar(idx, m) }">
                 <template v-if="editingUserId === m.id">
                   <el-tooltip :content="t('chat.cancelEdit')" placement="top">
-                    <el-button text circle class="icon-act" @click="cancelUserEdit(m)">
+                    <el-button text circle class="msg-toolbar-btn" @click="cancelUserEdit(m)">
                       <el-icon><Close /></el-icon>
                     </el-button>
                   </el-tooltip>
                   <el-tooltip :content="t('chat.copy')" placement="top">
-                    <el-button text circle class="icon-act" @click="copyText(userEdits[m.id] || '')">
+                    <el-button text circle class="msg-toolbar-btn" @click="copyText(userEdits[m.id] || '')">
                       <el-icon><DocumentCopy /></el-icon>
                     </el-button>
                   </el-tooltip>
@@ -388,7 +419,7 @@ function goFullChat() {
                     <el-button
                       text
                       circle
-                      class="icon-act"
+                      class="msg-toolbar-btn"
                       type="primary"
                       :disabled="chat.sending"
                       @click="resendUserMessage(m.id)"
@@ -399,12 +430,12 @@ function goFullChat() {
                 </template>
                 <template v-else>
                   <el-tooltip :content="t('chat.copy')" placement="top">
-                    <el-button text circle class="icon-act" @click="copyText(userEdits[m.id] || '')">
+                    <el-button text circle class="msg-toolbar-btn" @click="copyText(userEdits[m.id] || '')">
                       <el-icon><DocumentCopy /></el-icon>
                     </el-button>
                   </el-tooltip>
                   <el-tooltip :content="t('chat.edit')" placement="top">
-                    <el-button text circle class="icon-act" :disabled="chat.sending" @click="startUserEdit(m)">
+                    <el-button text circle class="msg-toolbar-btn" :disabled="chat.sending" @click="startUserEdit(m)">
                       <el-icon><Edit /></el-icon>
                     </el-button>
                   </el-tooltip>
@@ -427,7 +458,7 @@ function goFullChat() {
             >
               <div class="ai-toolbar" :class="{ 'ai-toolbar--visible': showAiToolbar(idx, m) }">
                 <el-tooltip :content="t('chat.copy')" placement="top">
-                  <el-button text circle class="icon-act" @click="copyText(m.content)">
+                  <el-button text circle class="msg-toolbar-btn" @click="copyText(m.content)">
                     <el-icon><DocumentCopy /></el-icon>
                   </el-button>
                 </el-tooltip>
@@ -435,7 +466,7 @@ function goFullChat() {
                   <el-button
                     text
                     circle
-                    class="icon-act"
+                    class="msg-toolbar-btn"
                     :type="feedback[m.id] === 'up' ? 'primary' : 'default'"
                     @click="setFeedback(m.id, 'up')"
                   >
@@ -448,7 +479,7 @@ function goFullChat() {
                   <el-button
                     text
                     circle
-                    class="icon-act"
+                    class="msg-toolbar-btn"
                     :type="feedback[m.id] === 'down' ? 'danger' : 'default'"
                     @click="setFeedback(m.id, 'down')"
                   >
@@ -458,12 +489,12 @@ function goFullChat() {
                   </el-button>
                 </el-tooltip>
                 <el-tooltip :content="t('chat.speak')" placement="top">
-                  <el-button text circle class="icon-act" @click="speakAssistant(m.content)">
+                  <el-button text circle class="msg-toolbar-btn" @click="speakAssistant(m.content)">
                     <el-icon><Microphone /></el-icon>
                   </el-button>
                 </el-tooltip>
                 <el-tooltip :content="t('chat.toCanvas')" placement="top">
-                  <el-button text circle class="icon-act" @click="openCanvasPage(m)">
+                  <el-button text circle class="msg-toolbar-btn" @click="openCanvasPage(m)">
                     <el-icon><EditPen /></el-icon>
                   </el-button>
                 </el-tooltip>
@@ -486,18 +517,14 @@ function goFullChat() {
           </el-button>
         </el-tooltip>
       </div>
-      <div v-if="chat.activeSessionId" class="quick-row">
-        <button type="button" class="quick-pill" @click="fillSuggestion(t('chat.quickTone') + '：更专业')">
-          {{ t('chat.quickTone') }}
-        </button>
-        <button type="button" class="quick-pill" @click="fillSuggestion(t('chat.quickLength') + '：精简一半')">
-          {{ t('chat.quickLength') }}
-        </button>
-        <button type="button" class="quick-pill" @click="fillSuggestion(t('chat.quickPolish'))">
-          {{ t('chat.quickPolish') }}
-        </button>
-      </div>
       <div class="composer-inner">
+        <input
+          ref="fileInputRef"
+          type="file"
+          class="file-input"
+          accept=".pdf,.doc,.docx,.txt,.md,.csv,.json,.xml,.html,.htm,.log,.yml,.yaml"
+          @change="onFileSelected"
+        />
         <el-input
           v-model="chat.inputDraft"
           type="textarea"
@@ -505,15 +532,26 @@ function goFullChat() {
           resize="none"
           class="composer-input"
           :placeholder="t('chat.inputPlaceholder')"
-          :disabled="!chat.activeSessionId"
+          :disabled="!chat.activeSessionId || uploadBusy"
           @keydown="onKeydown"
         />
+        <el-tooltip :content="t('chat.upload')" placement="top">
+          <el-button
+            class="attach-fab"
+            circle
+            :disabled="!chat.activeSessionId || chat.sending || uploadBusy"
+            :loading="uploadBusy"
+            @click="openFilePicker"
+          >
+            <el-icon class="fab-icon"><Paperclip /></el-icon>
+          </el-button>
+        </el-tooltip>
         <el-tooltip :content="chat.sending ? t('chat.stop') : t('chat.send')" placement="top">
           <el-button
             class="send-fab"
             type="primary"
             circle
-            :disabled="!chat.activeSessionId || (!chat.sending && !chat.inputDraft.trim())"
+            :disabled="!chat.activeSessionId || (!chat.sending && !chat.inputDraft.trim()) || uploadBusy"
             @click="chat.sending ? chat.stopStream() : onSend()"
           >
             <el-icon v-if="chat.sending" class="fab-icon"><CircleClose /></el-icon>
@@ -636,32 +674,6 @@ function goFullChat() {
   line-height: 1.5;
 }
 
-.quick-row {
-  max-width: 880px;
-  margin: 0 auto;
-  padding: 0 16px 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.quick-pill {
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: 12px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease;
-}
-
-.quick-pill:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
 .thread-head {
   flex-shrink: 0;
   padding: 10px 16px 8px;
@@ -700,7 +712,7 @@ function goFullChat() {
 
 .jump-wrap {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   padding: 0 0 8px;
   max-width: 880px;
   margin: 0 auto;
@@ -813,10 +825,6 @@ html.dark .jump-btn {
 .user-actions :deep(.el-button--primary) {
   color: var(--accent);
 }
-.user-actions .icon-act :deep(.el-icon) {
-  font-size: 20px;
-}
-
 .ai-content {
   width: 100%;
   padding: 4px 0 0;
@@ -848,21 +856,6 @@ html.dark .jump-btn {
   opacity: 1;
   pointer-events: auto;
 }
-.ai-toolbar :deep(.el-button) {
-  font-size: 12px;
-  padding: 2px;
-  margin: 0 1px;
-}
-
-.icon-act {
-  width: 38px;
-  height: 38px;
-  padding: 0;
-}
-.icon-act :deep(.el-icon) {
-  font-size: 20px;
-}
-
 .thumb-wrap {
   display: flex;
   align-items: center;
@@ -870,7 +863,7 @@ html.dark .jump-btn {
   color: currentColor;
 }
 .thumb-wrap.muted {
-  opacity: 0.45;
+  opacity: 0.42;
 }
 
 .typing {
@@ -937,14 +930,34 @@ html.dark .composer {
   margin: 0 auto;
 }
 
+.file-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .composer-input :deep(.el-textarea__inner) {
   border-radius: var(--radius-lg, 14px);
-  padding: 12px 52px 12px 14px;
+  padding: 12px 100px 12px 14px;
   min-height: 88px !important;
   background: var(--bg-elevated) !important;
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.attach-fab {
+  position: absolute;
+  right: 54px;
+  bottom: 10px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border-subtle) !important;
+  background: var(--bg-elevated) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: var(--shadow-sm);
 }
 
 .send-fab {
@@ -956,6 +969,35 @@ html.dark .composer {
   box-shadow: var(--shadow-md);
 }
 .fab-icon {
+  font-size: 18px;
+}
+
+.msg-toolbar-btn {
+  width: 36px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 0 !important;
+  margin: 0 2px !important;
+  border: 1px solid var(--border-subtle) !important;
+  background: var(--bg-elevated) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: none;
+}
+.msg-toolbar-btn:hover {
+  border-color: var(--accent-soft) !important;
+  color: var(--text-primary) !important;
+}
+.msg-toolbar-btn.is-text.el-button--primary {
+  border-color: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  background: var(--bg-elevated) !important;
+}
+.msg-toolbar-btn.is-text.el-button--danger {
+  border-color: rgba(239, 68, 68, 0.25) !important;
+  color: #ef4444 !important;
+  background: var(--bg-elevated) !important;
+}
+.msg-toolbar-btn :deep(.el-icon) {
   font-size: 18px;
 }
 </style>

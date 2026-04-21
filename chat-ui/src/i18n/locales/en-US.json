@@ -14,7 +14,7 @@
     "captchaRequired": "Please enter the captcha"
   },
   "app": {
-    "name": "Doubao-style Assistant",
+    "name": "AI Assistant",
     "tagline": "Spring AI · Streaming chat"
   },
   "settings": {
@@ -104,6 +104,11 @@
     "speak": "Read aloud",
     "toCanvas": "Open as document",
     "jumpToBottom": "Scroll to bottom",
+    "upload": "Upload file",
+    "uploading": "Extracting text…",
+    "uploadFail": "Failed to read file",
+    "uploadOk": "File text inserted. Add a note and send.",
+    "filePrefix": "[Uploaded: {name}]\n\nFile content below. Read it, then answer my question:\n\n",
     "canvasTitle": "Canvas editor",
     "canvasHint": "Edit Markdown here and apply to this assistant message (local display only)",
     "canvasApply": "Apply to message",
@@ -112,6 +117,7 @@
     "noUserBefore": "No previous user message found"
   },
   "errors": {
+    "fileTooLarge": "File too large",
     "loadSessions": "Failed to load conversations",
     "loadMessages": "Failed to load messages",
     "createSession": "Failed to create conversation",

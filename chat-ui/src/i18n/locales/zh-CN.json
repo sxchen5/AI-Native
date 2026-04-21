@@ -14,7 +14,7 @@
     "captchaRequired": "请填写验证码"
   },
   "app": {
-    "name": "豆包风格助手",
+    "name": "AI助手",
     "tagline": "Spring AI · 流式对话"
   },
   "settings": {
@@ -104,6 +104,11 @@
     "speak": "朗读",
     "toCanvas": "转为文档编辑",
     "jumpToBottom": "回到底部",
+    "upload": "上传文件",
+    "uploading": "正在解析文件…",
+    "uploadFail": "文件解析失败",
+    "uploadOk": "已插入文件内容，可补充说明后发送",
+    "filePrefix": "【上传文件：{name}】\n\n以下为文件内容，请先阅读理解，再回答我的问题：\n\n",
     "canvasTitle": "画布编辑",
     "canvasHint": "在此编辑 Markdown 文本，保存后更新该条 AI 回复（仅本地展示）",
     "canvasApply": "应用到消息",
@@ -112,6 +117,7 @@
     "noUserBefore": "未找到上一条用户消息"
   },
   "errors": {
+    "fileTooLarge": "文件过大",
     "loadSessions": "加载会话失败",
     "loadMessages": "加载消息失败",
     "createSession": "创建会话失败",

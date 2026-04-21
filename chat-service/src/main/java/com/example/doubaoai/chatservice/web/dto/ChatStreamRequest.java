@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Size;
  */
 public record ChatStreamRequest(
         @NotBlank String sessionId,
-        @Size(max = 16000) String content,
+        /** 含附件解析全文时可较长，服务端仍建议控制模型上下文 */
+        @Size(max = 500_000) String content,
         String restartFromUserMessageId) {
 }

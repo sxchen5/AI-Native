@@ -2,20 +2,22 @@ server:
   port: 8081
 
 spring:
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
   autoconfigure:
     exclude:
       # 使用自定义登录逻辑，禁用 Boot 默认随机用户
       - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
-  main:
-    # Spring Boot 3.3 + 部分生态组件会重复注册同名 Jackson 模块 Bean；允许后者覆盖前者，避免启动失败
-    allow-bean-definition-overriding: true
-  autoconfigure:
-    exclude:
       # 使用 OpenAiManualConfiguration 显式装配；避免依赖 jar 内的自动配置与手动 Bean 冲突
       - org.springframework.ai.model.openaisdk.autoconfigure.OpenAiSdkChatAutoConfiguration
       - org.springframework.ai.model.openaisdk.autoconfigure.OpenAiSdkEmbeddingAutoConfiguration
       - org.springframework.ai.model.openaisdk.autoconfigure.OpenAiSdkImageAutoConfiguration
       - org.springframework.ai.model.openaisdk.autoconfigure.OpenAiSdkAudioSpeechAutoConfiguration
+  main:
+    # Spring Boot 3.3 + 部分生态组件会重复注册同名 Jackson 模块 Bean；允许后者覆盖前者，避免启动失败
+    allow-bean-definition-overriding: true
   application:
     name: chat-service
   # Spring AI 2.0（OpenAI Java SDK 集成路径）

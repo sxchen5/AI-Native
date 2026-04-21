@@ -23,3 +23,15 @@ export async function listMessages(sessionId: string): Promise<ChatMessage[]> {
   const { data } = await http.get<ChatMessage[]>(`/api/sessions/${sessionId}/messages`)
   return data
 }
+
+export type ExtractedAttachment = { fileName: string; text: string }
+
+export async function extractAttachmentText(file: File): Promise<ExtractedAttachment> {
+  const form = new FormData()
+  form.append('file', file)
+  const { data } = await http.post<ExtractedAttachment>('/api/chat/attachments/extract', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120_000,
+  })
+  return data
+}

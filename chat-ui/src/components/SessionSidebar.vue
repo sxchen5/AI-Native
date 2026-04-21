@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import * as Icons from '@element-plus/icons-vue'
 import {
-  ChatDotRound,
+  Cpu,
   Expand,
   Fold,
   Plus,
@@ -104,7 +104,7 @@ async function onLogout() {
     <div class="sidebar-top">
       <div class="brand" v-show="!ui.sidebarCollapsedEffective">
         <div class="logo" aria-hidden="true">
-          <el-icon :size="20"><ChatDotRound /></el-icon>
+          <el-icon :size="20"><Cpu /></el-icon>
         </div>
         <div class="brand-text">
           <span class="brand-name">{{ t('app.name') }}</span>
@@ -112,7 +112,7 @@ async function onLogout() {
       </div>
       <div v-show="ui.sidebarCollapsedEffective" class="brand-mini">
         <div class="logo small" aria-hidden="true">
-          <el-icon :size="18"><ChatDotRound /></el-icon>
+          <el-icon :size="18"><Cpu /></el-icon>
         </div>
       </div>
       <el-tooltip :content="ui.sidebarCollapsedEffective ? t('session.expand') : t('session.collapse')" placement="bottom">

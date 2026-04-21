@@ -1,19 +1,18 @@
 <template>
-  <svg class="thumb-svg thumb-svg--down" viewBox="0 0 24 24" aria-hidden="true">
-    <path
-      fill="currentColor"
-      d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"
-    />
+  <svg class="thumb-ic thumb-ic--down" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7 10v11" />
+    <path d="M7 10H4a1 1 0 0 1-1-1V6a2 2 0 0 1 2-2h2" />
+    <path d="M11 5v13a2 2 0 0 0 2 2h1.2a2 2 0 0 0 1.86-1.27L19 10V6a2 2 0 0 0-2-2h-1.5l.28-1.12A2 2 0 0 0 13.44 2H11a1 1 0 0 0-1 1v1a2 2 0 0 1-2 2H7" />
   </svg>
 </template>
 
 <style scoped>
-.thumb-svg {
-  width: 1.2em;
-  height: 1.2em;
+.thumb-ic {
+  width: 1.15em;
+  height: 1.15em;
   display: block;
 }
-.thumb-svg--down {
+.thumb-ic--down {
   transform: rotate(180deg);
 }
 </style>
