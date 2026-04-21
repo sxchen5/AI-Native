@@ -388,6 +388,7 @@ async function onLogout() {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
+  margin-top: 10px;
   margin-bottom: 10px;
   border-radius: 999px;
   border: 1px solid var(--accent-soft);

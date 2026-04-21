@@ -25,8 +25,8 @@ import type { ChatMessage, DocumentCardMeta } from '../api/types'
 import { useChatStore } from '../stores/chat'
 import { renderAiMarkdown } from '../utils/markdown'
 import { markdownToPlainText } from '../utils/plainText'
-import IconHandDown from './icons/IconHandDown.vue'
-import IconHandUp from './icons/IconHandUp.vue'
+import IconThumbDown from './icons/IconThumbDown.vue'
+import IconThumbUp from './icons/IconThumbUp.vue'
 import { parseDocumentMeta } from '../utils/documentMeta'
 import { parseFeedbackVote } from '../utils/messageFeedback'
 import type { AttachmentChip } from '../utils/modelContext'
@@ -510,14 +510,6 @@ function docMeta(m: ChatMessage): DocumentCardMeta | null {
   return parseDocumentMeta(m.metadata ?? undefined)
 }
 
-/** 该条助手回复是否已生成过后续文档卡片（追加消息，不覆盖原文） */
-function hasDocumentCardForAssistant(assistantMessageId: string): boolean {
-  return chat.messages.some((m) => {
-    const d = parseDocumentMeta(m.metadata ?? undefined)
-    return d != null && d.sourceAssistantId === assistantMessageId
-  })
-}
-
 async function loadFollowUps() {
   const sid = chat.activeSessionId
   if (!sid || chat.sending || props.hideThreadHead) {
@@ -818,7 +810,7 @@ function askFollowUp(q: string) {
                     @click="toggleFeedback(m, 'up')"
                   >
                     <span class="thumb-wrap" :class="{ muted: feedbackVote(m) !== 'up' }">
-                      <IconHandUp />
+                      <IconThumbUp />
                     </span>
                   </el-button>
                 </el-tooltip>
@@ -832,7 +824,7 @@ function askFollowUp(q: string) {
                     @click="toggleFeedback(m, 'down')"
                   >
                     <span class="thumb-wrap" :class="{ muted: feedbackVote(m) !== 'down' }">
-                      <IconHandDown />
+                      <IconThumbDown />
                     </span>
                   </el-button>
                 </el-tooltip>
@@ -841,12 +833,7 @@ function askFollowUp(q: string) {
                     <el-icon><Microphone /></el-icon>
                   </el-button>
                 </el-tooltip>
-                <el-tooltip
-                  v-if="!hasDocumentCardForAssistant(m.id)"
-                  hide-after="0"
-                  :content="t('chat.toCanvas')"
-                  placement="top"
-                >
+                <el-tooltip hide-after="0" :content="t('chat.toCanvas')" placement="top">
                   <el-button
                     text
                     circle

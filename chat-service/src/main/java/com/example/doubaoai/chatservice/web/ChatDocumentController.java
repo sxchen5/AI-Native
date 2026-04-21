@@ -2,8 +2,6 @@ package com.example.doubaoai.chatservice.web;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Objects;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -56,15 +54,6 @@ public class ChatDocumentController {
                             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "只能转换助手消息");
                         }
                         String body = src.content() == null ? "" : src.content();
-                        for (StoredMessage m : session.historySnapshot()) {
-                            if (m.role() != ChatRole.ASSISTANT || m.metadata() == null || m.metadata().isBlank()) {
-                                continue;
-                            }
-                            Map<String, Object> ex = readMeta(m.metadata());
-                            if ("document_card".equals(ex.get("type")) && Objects.equals(src.id(), ex.get("sourceAssistantId"))) {
-                                throw new ResponseStatusException(HttpStatus.CONFLICT, "已为该回复生成文档卡片");
-                            }
-                        }
                         String title = titleAiService.summarizeDocumentTitle(body);
                         if (title.isBlank()) {
                             title = firstLineTitle(body);
