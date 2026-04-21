@@ -453,6 +453,14 @@ function docMeta(m: ChatMessage): DocumentCardMeta | null {
   return parseDocumentMeta(m.metadata ?? undefined)
 }
 
+/** 该条助手回复是否已生成过后续文档卡片（追加消息，不覆盖原文） */
+function hasDocumentCardForAssistant(assistantMessageId: string): boolean {
+  return chat.messages.some((m) => {
+    const d = parseDocumentMeta(m.metadata ?? undefined)
+    return d != null && d.sourceAssistantId === assistantMessageId
+  })
+}
+
 async function loadFollowUps() {
   const sid = chat.activeSessionId
   if (!sid || chat.sending || props.hideThreadHead) {
@@ -774,7 +782,12 @@ function askFollowUp(q: string) {
                     <el-icon><Microphone /></el-icon>
                   </el-button>
                 </el-tooltip>
-                <el-tooltip hide-after="0" :content="t('chat.toCanvas')" placement="top">
+                <el-tooltip
+                  v-if="!hasDocumentCardForAssistant(m.id)"
+                  hide-after="0"
+                  :content="t('chat.toCanvas')"
+                  placement="top"
+                >
                   <el-button
                     text
                     circle

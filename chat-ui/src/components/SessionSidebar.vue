@@ -168,6 +168,8 @@ async function onLogout() {
         </span>
       </button>
 
+      <div class="hist-top-spacer" aria-hidden="true" />
+
       <div class="hist-head">{{ t('session.historyTitle') }}</div>
 
       <div ref="histScrollEl" class="hist-scroll u-scroll" @scroll.passive="onHistScroll">
@@ -382,12 +384,20 @@ async function onLogout() {
   color: var(--text-secondary);
 }
 
+/* 历史区域相对侧栏主区向下偏移约 30%（侧栏可视高度） */
+.hist-top-spacer {
+  flex: 0 0 30%;
+  min-height: 48px;
+  max-height: 220px;
+  pointer-events: none;
+}
+
 .new-chat-pill {
   width: 100%;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 10px 12px;
   margin-bottom: 10px;
   border-radius: 999px;
   border: 1px solid var(--accent-soft);
@@ -445,7 +455,7 @@ html.dark .new-chat-pill {
 .hist-head {
   font-size: 12px;
   color: var(--text-muted);
-  margin: 0 2px 8px;
+  margin: 0 2px 6px;
   flex-shrink: 0;
 }
 
@@ -469,7 +479,7 @@ html.dark .new-chat-pill {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 10px 10px 8px;
+  padding: 7px 10px 7px 8px;
   border-radius: 14px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-elevated);
