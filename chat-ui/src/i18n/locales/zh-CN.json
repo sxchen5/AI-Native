@@ -1,0 +1,50 @@
+{
+  "app": {
+    "name": "豆包风格助手",
+    "tagline": "Spring AI · 流式对话"
+  },
+  "header": {
+    "langZh": "中文",
+    "langEn": "English",
+    "themeLight": "浅色",
+    "themeDark": "深色"
+  },
+  "session": {
+    "new": "新建对话",
+    "defaultTitle": "新对话",
+    "empty": "暂无会话，点击上方新建",
+    "loading": "加载中…",
+    "rename": "重命名",
+    "delete": "删除",
+    "renameTitle": "重命名会话",
+    "renamePlaceholder": "请输入新标题",
+    "save": "保存",
+    "cancel": "取消",
+    "deleteTitle": "删除确认",
+    "deleteConfirm": "确定删除会话「{title}」吗？",
+    "confirmDelete": "删除",
+    "titleRequired": "标题不能为空",
+    "sendingWarn": "正在生成回复，请等待或先停止",
+    "copy": "复制回复",
+    "copied": "已复制",
+    "copyFail": "复制失败"
+  },
+  "chat": {
+    "emptyTitle": "开始对话",
+    "emptyHint": "左侧新建或选择会话，在下方输入问题；支持流式打字机输出。",
+    "selectSession": "请选择会话",
+    "loadingMessages": "加载消息…",
+    "inputPlaceholder": "输入消息，Enter 发送，Shift+Enter 换行",
+    "send": "发送",
+    "stop": "停止",
+    "refresh": "刷新",
+    "assistant": "助手"
+  },
+  "errors": {
+    "loadSessions": "加载会话失败",
+    "loadMessages": "加载消息失败",
+    "createSession": "创建会话失败",
+    "send": "发送失败",
+    "stopped": "已停止生成"
+  }
+}

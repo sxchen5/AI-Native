@@ -5,7 +5,7 @@
 ## 技术栈
 
 - **后端**：Spring Boot `3.3.6`、Spring Cloud `2024.0.3`、Spring Cloud Alibaba `2023.0.3.4`（Nacos）、Spring AI `2.0.0-M4`（OpenAI Java SDK 集成路径）、Java `17+`
-- **前端**：Vue `3` + Vite、Element Plus、Axios、`fetch + ReadableStream` 消费 SSE
+- **前端**：Vue `3` + Vite、Element Plus、Pinia、Vue I18n（中/英）、主题深/浅切换、Axios + `fetch` SSE 流式、`marked` + `highlight.js` AI 消息渲染
 - **AI 协议**：OpenAI 官方 Java SDK（`openai-java`）+ Spring AI `OpenAiSdkChatModel` + `ChatClient`（OpenAI 兼容 HTTP 协议，可切换对接 **OpenAI / 通义千问兼容模式 / 百度千帆 OpenAI 兼容**）
 
 > 说明：`spring-ai-starter-model-openai` / `spring-ai-starter-model-openai-sdk` 在 `2.0.0-M4` 的 POM 中会固定依赖 **Spring Boot `4.1.x`**，与“Boot `3.3.x`”要求冲突。为保证可运行，本项目改为引入 **`spring-ai-openai-sdk` + `spring-ai-autoconfigure-model-openai-sdk`（仅用于 `@ConfigurationProperties`）** 并 **手动装配** `OpenAiSdkChatModel` / `ChatClient`（见 `OpenAiManualConfiguration`）。
