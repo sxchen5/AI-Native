@@ -3,8 +3,8 @@ import { ElMessage } from 'element-plus'
 import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-defineProps<{
-  /** 画布分屏内嵌：收紧聊天区顶栏 */
+const props = defineProps<{
+  /** 画布分屏内嵌：收紧聊天区顶栏，且不清空当前会话（避免左侧对话被置空） */
   compact?: boolean
 }>()
 
@@ -20,8 +20,13 @@ const ui = useUiStore()
 onMounted(async () => {
   try {
     await chat.fetchSessions()
-    // 登录后不自动新建会话：用户可先输入，首次发送时再创建会话
-    chat.setActiveSession(null)
+    if (!props.compact) {
+      // 全屏聊天：登录后不自动新建会话
+      chat.setActiveSession(null)
+    } else if (chat.activeSessionId) {
+      // 画布内嵌：保留当前会话并拉取消息，避免左侧列表为空
+      await chat.fetchMessages(chat.activeSessionId)
+    }
   } catch (e: unknown) {
     ElMessage.error((e as Error).message || t('errors.loadSessions'))
   }
