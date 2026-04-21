@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import * as Icons from '@element-plus/icons-vue'
 import {
   ChatDotRound,
   Expand,
@@ -7,18 +8,19 @@ import {
   EditPen,
   Delete,
   MoreFilled,
-  Setting,
   SwitchButton,
   Moon,
   Sunny,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { SessionSummary } from '../api/types'
 import { useAuthStore } from '../stores/auth'
 import { useChatStore } from '../stores/chat'
-import { useLocaleStore } from '../stores/locale'
+import { useLocaleStore, type AppLocale } from '../stores/locale'
+import { useProfileStore, AVATAR_PRESETS } from '../stores/profile'
 import { useThemeStore } from '../stores/theme'
 import { useUiStore } from '../stores/ui'
 
@@ -28,6 +30,14 @@ const ui = useUiStore()
 const auth = useAuthStore()
 const locale = useLocaleStore()
 const theme = useThemeStore()
+const profile = useProfileStore()
+
+const userAvatarIcon = computed(() => resolvePresetIcon(profile.currentAvatar.iconName))
+
+function resolvePresetIcon(name: string) {
+  const comp = (Icons as Record<string, unknown>)[name]
+  return (comp as typeof Icons.UserFilled) || Icons.UserFilled
+}
 
 function sortedSessions() {
   return [...chat.sessions].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
@@ -166,8 +176,10 @@ async function onLogout() {
     <!-- 底部：用户名一行 + 设置 / 退出（语言与主题在设置里） -->
     <div v-show="!ui.sidebarCollapsedEffective" class="sidebar-footer">
       <button type="button" class="user-line" @click="ui.openSettings">
+        <span class="user-avatar" :style="{ background: profile.currentAvatar.color }" aria-hidden="true">
+          <el-icon :size="18"><component :is="userAvatarIcon" /></el-icon>
+        </span>
         <span class="user-name">{{ auth.username || '—' }}</span>
-        <el-icon class="gear"><Setting /></el-icon>
       </button>
     </div>
     <div v-show="ui.sidebarCollapsedEffective" class="sidebar-footer mini">
@@ -180,8 +192,28 @@ async function onLogout() {
 
     <el-dialog v-model="ui.settingsOpen" :title="t('settings.title')" width="360px" @closed="ui.closeSettings">
       <div class="settings-block">
+        <div class="settings-label">{{ t('settings.avatar') }}</div>
+        <p class="settings-hint">{{ t('settings.avatarHint') }}</p>
+        <div class="avatar-grid">
+          <button
+            v-for="opt in AVATAR_PRESETS"
+            :key="opt.id"
+            type="button"
+            class="avatar-pick"
+            :class="{ active: profile.avatarId === opt.id }"
+            :style="{ background: opt.color }"
+            :aria-label="opt.id"
+            @click="profile.setAvatarId(opt.id)"
+          >
+            <el-icon :size="20">
+              <component :is="resolvePresetIcon(opt.iconName)" />
+            </el-icon>
+          </button>
+        </div>
+      </div>
+      <div class="settings-block">
         <div class="settings-label">{{ t('settings.language') }}</div>
-        <el-radio-group v-model="locale.locale" size="small">
+        <el-radio-group :model-value="locale.locale" size="small" @change="(v: string) => locale.setLocale(v as AppLocale)">
           <el-radio-button label="zh-CN">{{ t('header.langZh') }}</el-radio-button>
           <el-radio-button label="en-US">{{ t('header.langEn') }}</el-radio-button>
         </el-radio-group>
@@ -363,7 +395,7 @@ async function onLogout() {
 .sidebar-footer {
   border-top: 1px solid var(--border-subtle);
   padding: 10px 10px 12px;
-  background: #f3f3f3;
+  background: #f9f9f9;
 }
 .sidebar-footer.mini {
   display: flex;
@@ -375,8 +407,7 @@ async function onLogout() {
   width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   padding: 8px 10px;
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
@@ -389,6 +420,17 @@ async function onLogout() {
 .user-line:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+}
+
 .user-name {
   font-size: 13px;
   font-weight: 600;
@@ -399,9 +441,40 @@ async function onLogout() {
   flex: 1;
   min-width: 0;
 }
-.gear {
+
+.settings-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
   color: var(--text-muted);
-  flex-shrink: 0;
+  line-height: 1.45;
+}
+
+.avatar-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.avatar-pick {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  padding: 0;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.avatar-pick:hover {
+  transform: scale(1.06);
+}
+
+.avatar-pick.active {
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
 .settings-logout {

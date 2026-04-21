@@ -19,6 +19,8 @@
   },
   "settings": {
     "title": "Settings",
+    "avatar": "Profile icon",
+    "avatarHint": "Pick an icon for the sidebar and settings row.",
     "language": "Language",
     "theme": "Theme"
   },

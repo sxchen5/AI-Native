@@ -19,6 +19,8 @@
   },
   "settings": {
     "title": "设置",
+    "avatar": "用户图标",
+    "avatarHint": "点击下方图标更换侧栏与设置中的显示样式。",
     "language": "界面语言",
     "theme": "主题模式"
   },

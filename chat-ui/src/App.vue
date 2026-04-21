@@ -6,18 +6,21 @@ import en from 'element-plus/es/locale/lang/en'
 import LoginView from './components/LoginView.vue'
 import { useAuthStore } from './stores/auth'
 import { useLocaleStore } from './stores/locale'
+import { useProfileStore } from './stores/profile'
 import { useThemeStore } from './stores/theme'
 import { useUiStore } from './stores/ui'
 
 const localeStore = useLocaleStore()
 const themeStore = useThemeStore()
 const uiStore = useUiStore()
+const profileStore = useProfileStore()
 const auth = useAuthStore()
 
 onBeforeMount(async () => {
   themeStore.init()
   localeStore.init()
   uiStore.init()
+  profileStore.init()
   await auth.refreshMe()
 })
 
@@ -41,6 +44,6 @@ const elementLocale = computed(() => (localeStore.locale === 'en-US' ? en : zhCn
 
 .boot {
   height: 100%;
-  background: #ffffff;
+  background: var(--bg-elevated);
 }
 </style>

@@ -4,6 +4,7 @@ import {
   CircleCheckFilled,
   CircleClose,
   CircleCloseFilled,
+  Close,
   DocumentCopy,
   Edit,
   EditPen,
@@ -13,7 +14,7 @@ import {
 } from '@element-plus/icons-vue'
 import { FullScreen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -21,6 +22,7 @@ import type { ChatMessage } from '../api/types'
 import { useChatStore } from '../stores/chat'
 import { renderAiMarkdown } from '../utils/markdown'
 import { markdownToPlainText } from '../utils/plainText'
+import { useScrollbarFade } from '../utils/scrollbarFade'
 
 const { t, tm } = useI18n()
 const router = useRouter()
@@ -32,6 +34,8 @@ const props = defineProps<{
 }>()
 
 const bottomAnchor = ref<HTMLElement | null>(null)
+const msgScrollEl = ref<HTMLElement | null>(null)
+const msgScrollFade = useScrollbarFade(msgScrollEl)
 const userEdits = reactive<Record<string, string>>({})
 const feedback = reactive<Record<string, 'up' | 'down' | null>>({})
 const hoveringRow = reactive<Record<string, boolean>>({})
@@ -94,6 +98,14 @@ watch(
     void scrollToBottom(false)
   },
 )
+
+onMounted(() => {
+  msgScrollFade.attach()
+})
+
+onBeforeUnmount(() => {
+  msgScrollFade.detach()
+})
 
 async function copyText(text: string) {
   try {
@@ -273,7 +285,7 @@ function goFullChat() {
       </div>
     </header>
 
-    <div class="msg-scroll">
+    <div ref="msgScrollEl" class="msg-scroll u-scroll">
       <div v-if="!chat.activeSessionId" class="empty">
         <h2>{{ t('chat.emptyTitle') }}</h2>
         <p>{{ t('chat.emptyHint') }}</p>
@@ -323,31 +335,40 @@ function goFullChat() {
               </div>
               <div class="user-actions" :class="{ 'user-actions--visible': showUserToolbar(idx, m) }">
                 <template v-if="editingUserId === m.id">
-                  <el-button text size="small" @click="cancelUserEdit(m)">
-                    {{ t('chat.cancelEdit') }}
-                  </el-button>
-                  <el-button text size="small" @click="copyText(userEdits[m.id] || '')">
-                    <el-icon><DocumentCopy /></el-icon>
-                    {{ t('chat.copy') }}
-                  </el-button>
-                  <el-button text size="small" type="primary" :disabled="chat.sending" @click="resendUserMessage(m.id)">
-                    <el-icon><Promotion /></el-icon>
-                    {{ t('chat.resend') }}
-                  </el-button>
+                  <el-tooltip :content="t('chat.cancelEdit')" placement="top">
+                    <el-button text circle class="icon-act" @click="cancelUserEdit(m)">
+                      <el-icon><Close /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip :content="t('chat.copy')" placement="top">
+                    <el-button text circle class="icon-act" @click="copyText(userEdits[m.id] || '')">
+                      <el-icon><DocumentCopy /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip :content="t('chat.resend')" placement="top">
+                    <el-button
+                      text
+                      circle
+                      class="icon-act"
+                      type="primary"
+                      :disabled="chat.sending"
+                      @click="resendUserMessage(m.id)"
+                    >
+                      <el-icon><Promotion /></el-icon>
+                    </el-button>
+                  </el-tooltip>
                 </template>
                 <template v-else>
-                  <el-button text size="small" :disabled="chat.sending" @click="startUserEdit(m)">
-                    <el-icon><Edit /></el-icon>
-                    {{ t('chat.edit') }}
-                  </el-button>
-                  <el-button text size="small" @click="copyText(userEdits[m.id] || '')">
-                    <el-icon><DocumentCopy /></el-icon>
-                    {{ t('chat.copy') }}
-                  </el-button>
-                  <el-button text size="small" type="primary" :disabled="chat.sending" @click="resendUserMessage(m.id)">
-                    <el-icon><Promotion /></el-icon>
-                    {{ t('chat.resend') }}
-                  </el-button>
+                  <el-tooltip :content="t('chat.copy')" placement="top">
+                    <el-button text circle class="icon-act" @click="copyText(userEdits[m.id] || '')">
+                      <el-icon><DocumentCopy /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip :content="t('chat.edit')" placement="top">
+                    <el-button text circle class="icon-act" :disabled="chat.sending" @click="startUserEdit(m)">
+                      <el-icon><Edit /></el-icon>
+                    </el-button>
+                  </el-tooltip>
                 </template>
               </div>
             </div>
@@ -366,36 +387,43 @@ function goFullChat() {
               :class="{ 'ai-toolbar-slot--streaming': isAssistantStreaming(m) }"
             >
               <div class="ai-toolbar" :class="{ 'ai-toolbar--visible': showAiToolbar(idx, m) }">
-                <el-button text size="small" @click="copyText(m.content)">
-                  <el-icon><DocumentCopy /></el-icon>
-                  {{ t('chat.copy') }}
-                </el-button>
-                <el-button
-                  text
-                  size="small"
-                  :type="feedback[m.id] === 'up' ? 'primary' : 'default'"
-                  @click="setFeedback(m.id, 'up')"
-                >
-                  <el-icon><CircleCheckFilled v-if="feedback[m.id] === 'up'" /><CircleCheck v-else /></el-icon>
-                  {{ t('chat.like') }}
-                </el-button>
-                <el-button
-                  text
-                  size="small"
-                  :type="feedback[m.id] === 'down' ? 'danger' : 'default'"
-                  @click="setFeedback(m.id, 'down')"
-                >
-                  <el-icon><CircleCloseFilled v-if="feedback[m.id] === 'down'" /><CircleClose v-else /></el-icon>
-                  {{ t('chat.dislike') }}
-                </el-button>
-                <el-button text size="small" @click="speakAssistant(m.content)">
-                  <el-icon><Microphone /></el-icon>
-                  {{ t('chat.speak') }}
-                </el-button>
-                <el-button text size="small" @click="openCanvasPage(m)">
-                  <el-icon><EditPen /></el-icon>
-                  {{ t('chat.toCanvas') }}
-                </el-button>
+                <el-tooltip :content="t('chat.copy')" placement="top">
+                  <el-button text circle class="icon-act" @click="copyText(m.content)">
+                    <el-icon><DocumentCopy /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip :content="t('chat.like')" placement="top">
+                  <el-button
+                    text
+                    circle
+                    class="icon-act"
+                    :type="feedback[m.id] === 'up' ? 'primary' : 'default'"
+                    @click="setFeedback(m.id, 'up')"
+                  >
+                    <el-icon><CircleCheckFilled v-if="feedback[m.id] === 'up'" /><CircleCheck v-else /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip :content="t('chat.dislike')" placement="top">
+                  <el-button
+                    text
+                    circle
+                    class="icon-act"
+                    :type="feedback[m.id] === 'down' ? 'danger' : 'default'"
+                    @click="setFeedback(m.id, 'down')"
+                  >
+                    <el-icon><CircleCloseFilled v-if="feedback[m.id] === 'down'" /><CircleClose v-else /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip :content="t('chat.speak')" placement="top">
+                  <el-button text circle class="icon-act" @click="speakAssistant(m.content)">
+                    <el-icon><Microphone /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip :content="t('chat.toCanvas')" placement="top">
+                  <el-button text circle class="icon-act" @click="openCanvasPage(m)">
+                    <el-icon><EditPen /></el-icon>
+                  </el-button>
+                </el-tooltip>
               </div>
             </div>
           </div>
@@ -668,7 +696,7 @@ function goFullChat() {
   border-radius: 12px;
   background: var(--bg-input-fill);
   color: var(--text-primary);
-  border: 1px solid var(--border-subtle);
+  border: none;
   padding: 10px 12px;
   font-size: 14px;
   line-height: 1.55;
@@ -745,6 +773,12 @@ function goFullChat() {
 .ai-toolbar :deep(.el-button) {
   font-size: 12px;
   padding: 4px 6px;
+}
+
+.icon-act {
+  width: 32px;
+  height: 32px;
+  padding: 0;
 }
 
 .typing {

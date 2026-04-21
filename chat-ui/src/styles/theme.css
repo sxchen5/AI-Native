@@ -29,6 +29,12 @@ html:not(.dark) {
   --accent: #3b6cff;
   --accent-soft: rgba(59, 108, 255, 0.12);
   --code-bg: #f1f5f9;
+  --login-page-bg: linear-gradient(160deg, #f0f4ff 0%, #f9f9f9 45%, #ffffff 100%);
+  --login-card-bg: #ffffff;
+  --login-card-border: rgba(15, 23, 42, 0.06);
+  --login-heading: #111827;
+  --login-muted: #6b7280;
+  --login-hint: #9ca3af;
 }
 
 html.dark {
@@ -36,17 +42,24 @@ html.dark {
   --bg-app: #0c0f14;
   --bg-elevated: #141922;
   --bg-sidebar: #10141c;
-  --bg-chat-panel: #141922;
-  --bg-input-fill: #1e2433;
+  /* 聊天主区保持白底，文字用浅色页上的深色字，避免与深色变量冲突 */
+  --bg-chat-panel: #ffffff;
+  --bg-input-fill: #f0f2f7;
   --bg-bubble-user: linear-gradient(135deg, #4f7dff 0%, #7aa2ff 100%);
   --bg-bubble-ai: #1a2130;
-  --border-subtle: rgba(148, 163, 184, 0.12);
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
+  --border-subtle: rgba(15, 23, 42, 0.1);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
   --text-muted: #64748b;
-  --accent: #7aa2ff;
-  --accent-soft: rgba(122, 162, 255, 0.15);
-  --code-bg: #0f172a;
+  --accent: #3b6cff;
+  --accent-soft: rgba(59, 108, 255, 0.14);
+  --code-bg: #f1f5f9;
+  --login-page-bg: linear-gradient(160deg, #1a2234 0%, #121826 45%, #0c0f14 100%);
+  --login-card-bg: #141922;
+  --login-card-border: rgba(148, 163, 184, 0.14);
+  --login-heading: #f1f5f9;
+  --login-muted: #94a3b8;
+  --login-hint: #64748b;
 }
 
 html,
@@ -63,6 +76,54 @@ body {
 
 #app {
   height: 100%;
+}
+
+/* 细滚动条：加在可滚动容器上（.u-scroll），悬停或滚动时显示拇指，静止淡出 */
+.u-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.u-scroll:hover,
+.u-scroll.u-scroll--active {
+  scrollbar-color: #d9d9d9 transparent;
+}
+.u-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.u-scroll::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 999px;
+}
+.u-scroll:hover::-webkit-scrollbar-thumb,
+.u-scroll.u-scroll--active::-webkit-scrollbar-thumb {
+  background-color: #d9d9d9;
+}
+.u-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Element Plus Scrollbar 内层 */
+.el-scrollbar__wrap {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.el-scrollbar:hover .el-scrollbar__wrap {
+  scrollbar-color: #d9d9d9 transparent;
+}
+.el-scrollbar__wrap::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.el-scrollbar__wrap::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 999px;
+}
+.el-scrollbar:hover .el-scrollbar__wrap::-webkit-scrollbar-thumb {
+  background-color: #d9d9d9;
+}
+.el-scrollbar__wrap::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 /* 消息入场动画 */

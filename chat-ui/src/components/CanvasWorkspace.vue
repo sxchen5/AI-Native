@@ -18,6 +18,7 @@ import { useChatStore } from '../stores/chat'
 import { useUiStore } from '../stores/ui'
 import { extractMarkdownToc, firstMarkdownTitle } from '../utils/canvasOutline'
 import { renderAiMarkdown } from '../utils/markdown'
+import { useScrollbarFade } from '../utils/scrollbarFade'
 
 const CANVAS_CHAT_WIDTH_KEY = 'doubao-canvas-chat-width-px'
 
@@ -35,6 +36,9 @@ const canvasDraft = ref('')
 const lastModified = ref<Date | null>(null)
 const tocCollapsed = ref(false)
 const previewRef = ref<HTMLElement | null>(null)
+const tocInnerRef = ref<HTMLElement | null>(null)
+const previewScrollFade = useScrollbarFade(previewRef)
+const tocScrollFade = useScrollbarFade(tocInnerRef)
 
 const docTitle = computed(() =>
   firstMarkdownTitle(canvasDraft.value, t('canvas.untitledDoc')),
@@ -156,10 +160,14 @@ onMounted(() => {
   ui.enterCanvasLayout()
   nextTick(() => initChatPaneWidth())
   syncDraftFromStore()
+  previewScrollFade.attach()
+  tocScrollFade.attach()
 })
 
 onBeforeUnmount(() => {
   ui.exitCanvasLayout()
+  previewScrollFade.detach()
+  tocScrollFade.detach()
 })
 
 watch(messageId, () => syncDraftFromStore())
@@ -227,7 +235,7 @@ watch(
           <button type="button" class="toc-toggle" :aria-label="t('canvas.toggleToc')" @click="tocCollapsed = !tocCollapsed">
             <el-icon><DArrowLeft v-if="!tocCollapsed" /><DArrowRight v-else /></el-icon>
           </button>
-          <div v-show="!tocCollapsed" class="toc-inner">
+          <div ref="tocInnerRef" v-show="!tocCollapsed" class="toc-inner u-scroll">
             <div class="toc-head">{{ t('canvas.outline') }}</div>
             <nav class="toc-nav">
               <button
@@ -264,7 +272,7 @@ watch(
               <el-icon><View /></el-icon>
               {{ t('canvas.preview') }}
             </div>
-            <div ref="previewRef" class="preview-scroll">
+            <div ref="previewRef" class="preview-scroll u-scroll">
               <div class="prose-ai canvas-doc" v-html="md(canvasDraft)" />
             </div>
           </div>

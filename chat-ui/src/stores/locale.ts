@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 import { i18n } from '../i18n'
 
@@ -7,27 +7,26 @@ const STORAGE_KEY = 'doubao-locale'
 
 export type AppLocale = 'zh-CN' | 'en-US'
 
-function applyI18nLocale(next: AppLocale) {
-  const gl = i18n.global as { locale?: unknown }
-  const loc = gl.locale
-  if (loc && typeof loc === 'object' && 'value' in loc) {
-    ;(loc as { value: AppLocale }).value = next
-  } else {
-    ;(gl as { locale: AppLocale }).locale = next
-  }
-}
-
 export const useLocaleStore = defineStore('locale', () => {
   const locale = ref<AppLocale>('zh-CN')
 
+  /** 与 vue-i18n@11 的 WritableComputedRef 同步，修复 v-model 不生效 */
+  watch(
+    locale,
+    (next) => {
+      const gl = i18n.global.locale as unknown as { value: AppLocale }
+      gl.value = next
+      try {
+        localStorage.setItem(STORAGE_KEY, next)
+      } catch {
+        // ignore
+      }
+    },
+    { flush: 'sync' },
+  )
+
   function setLocale(next: AppLocale) {
     locale.value = next
-    applyI18nLocale(next)
-    try {
-      localStorage.setItem(STORAGE_KEY, next)
-    } catch {
-      // ignore
-    }
   }
 
   function toggle() {
@@ -39,11 +38,11 @@ export const useLocaleStore = defineStore('locale', () => {
       const saved = localStorage.getItem(STORAGE_KEY) as AppLocale | null
       if (saved === 'zh-CN' || saved === 'en-US') {
         locale.value = saved
-        applyI18nLocale(saved)
       }
     } catch {
       // ignore
     }
+    ;(i18n.global.locale as unknown as { value: AppLocale }).value = locale.value
   }
 
   return { locale, setLocale, toggle, init }

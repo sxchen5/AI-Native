@@ -93,27 +93,27 @@ async function onSubmit() {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: linear-gradient(160deg, #f0f4ff 0%, #f9f9f9 45%, #ffffff 100%);
+  background: var(--login-page-bg);
 }
 .card {
   width: 100%;
   max-width: 400px;
   padding: 28px 28px 32px;
   border-radius: 16px;
-  background: #fff;
+  background: var(--login-card-bg);
   box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
-  border: 1px solid rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--login-card-border);
 }
 h1 {
   margin: 0 0 8px;
   font-size: 22px;
   font-weight: 700;
-  color: #111827;
+  color: var(--login-heading);
 }
 .sub {
   margin: 0 0 20px;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--login-muted);
 }
 .captcha-row {
   display: flex;
@@ -124,11 +124,11 @@ h1 {
   height: 40px;
   border-radius: 8px;
   cursor: pointer;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-subtle);
 }
 .hint {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--login-hint);
   margin-top: 4px;
 }
 .submit {
