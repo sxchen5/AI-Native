@@ -37,6 +37,9 @@ html:not(.dark) {
   --login-heading: #111827;
   --login-muted: #6b7280;
   --login-hint: #9ca3af;
+  /* 侧栏会话列表：无默认底，悬停/选中用 */
+  --sidebar-item-hover: rgba(15, 23, 42, 0.06);
+  --sidebar-item-active: #ffffff;
 }
 
 html.dark {
@@ -63,6 +66,8 @@ html.dark {
   --login-heading: #f1f5f9;
   --login-muted: #94a3b8;
   --login-hint: #64748b;
+  --sidebar-item-hover: rgba(148, 163, 184, 0.1);
+  --sidebar-item-active: var(--bg-elevated);
 }
 
 html,

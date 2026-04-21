@@ -54,6 +54,15 @@ export async function freezeDocumentMessage(sessionId: string, messageId: string
   return data
 }
 
+export async function setMessageFeedback(
+  sessionId: string,
+  messageId: string,
+  vote: 'up' | 'down' | 'clear',
+): Promise<ChatMessage> {
+  const { data } = await http.post<ChatMessage>('/api/chat/message/feedback', { sessionId, messageId, vote })
+  return data
+}
+
 export async function fetchFollowUpQuestions(sessionId: string): Promise<string[]> {
   const { data } = await http.post<{ questions: string[] }>('/api/chat/suggestions', { sessionId })
   return data.questions ?? []

@@ -168,8 +168,6 @@ async function onLogout() {
         </span>
       </button>
 
-      <div class="hist-top-spacer" aria-hidden="true" />
-
       <div class="hist-head">{{ t('session.historyTitle') }}</div>
 
       <div ref="histScrollEl" class="hist-scroll u-scroll" @scroll.passive="onHistScroll">
@@ -384,14 +382,6 @@ async function onLogout() {
   color: var(--text-secondary);
 }
 
-/* 历史区域相对侧栏主区向下偏移约 30%（侧栏可视高度） */
-.hist-top-spacer {
-  flex: 0 0 30%;
-  min-height: 48px;
-  max-height: 220px;
-  pointer-events: none;
-}
-
 .new-chat-pill {
   width: 100%;
   display: flex;
@@ -480,33 +470,33 @@ html.dark .new-chat-pill {
   align-items: center;
   gap: 8px;
   padding: 7px 10px 7px 8px;
-  border-radius: 14px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-elevated);
+  border-radius: 12px;
+  border: none;
+  background: transparent;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+  transition: background 0.15s ease;
 }
 .item:hover {
-  border-color: var(--border-subtle);
+  background: var(--sidebar-item-hover);
 }
 .item.active {
-  border-color: var(--accent-soft);
-  box-shadow: 0 0 0 2px var(--accent-soft);
+  background: var(--sidebar-item-active);
 }
 
 .item-msg-icon {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  border: 1px solid var(--border-subtle);
+  border: none;
   flex-shrink: 0;
   display: grid;
   place-items: center;
   color: var(--text-muted);
-  background: var(--bg-sidebar);
+  background: transparent;
+}
+.item:hover .item-msg-icon,
+.item.active .item-msg-icon {
+  color: var(--text-secondary);
 }
 .item-msg-svg {
   width: 16px;
@@ -567,16 +557,16 @@ html.dark .new-chat-pill {
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  border: 1px solid var(--border-subtle);
+  border: none;
   border-radius: 10px;
-  background: var(--bg-elevated);
+  background: transparent;
   cursor: pointer;
   font: inherit;
   text-align: left;
-  transition: box-shadow 0.2s ease;
+  transition: background 0.15s ease;
 }
 .user-line:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  background: var(--sidebar-item-hover);
 }
 
 .user-avatar {

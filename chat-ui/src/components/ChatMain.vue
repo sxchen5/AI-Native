@@ -25,9 +25,10 @@ import type { ChatMessage, DocumentCardMeta } from '../api/types'
 import { useChatStore } from '../stores/chat'
 import { renderAiMarkdown } from '../utils/markdown'
 import { markdownToPlainText } from '../utils/plainText'
-import IconThumbDown from './icons/IconThumbDown.vue'
-import IconThumbUp from './icons/IconThumbUp.vue'
+import IconHandDown from './icons/IconHandDown.vue'
+import IconHandUp from './icons/IconHandUp.vue'
 import { parseDocumentMeta } from '../utils/documentMeta'
+import { parseFeedbackVote } from '../utils/messageFeedback'
 import type { AttachmentChip } from '../utils/modelContext'
 import { parseUserBubbleFromMetadata } from '../utils/modelContext'
 
@@ -45,7 +46,6 @@ const msgScrollEl = ref<HTMLElement | null>(null)
 const showJumpToBottom = ref(false)
 let scrollThumbTimer: ReturnType<typeof setTimeout> | null = null
 const userEdits = reactive<Record<string, string>>({})
-const feedback = reactive<Record<string, 'up' | 'down' | null>>({})
 const hoveringRow = reactive<Record<string, boolean>>({})
 const editingUserId = ref<string | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -312,7 +312,50 @@ function runStream(
 ) {
   const sid = chat.activeSessionId!
   let assistantId = ''
-  let assistantContent = ''
+  /** 已收到的全文（SSE），打字机从该缓冲逐字显示到气泡 */
+  let streamBuffer = ''
+  let streamShown = 0
+  let streamRaf = 0
+  let streamTargetMessageId = ''
+
+  const flushStreamVisual = () => {
+    if (!assistantId) return
+    if (streamShown < streamBuffer.length) {
+      streamShown = streamBuffer.length
+      chat.messages = chat.messages.map((m) =>
+        m.id === assistantId ? { ...m, content: streamBuffer } : m,
+      )
+    }
+  }
+
+  const pumpTypewriter = () => {
+    streamRaf = 0
+    const tid = assistantId || streamTargetMessageId
+    if (!tid) return
+    const perFrame = 3
+    if (streamShown < streamBuffer.length) {
+      streamShown = Math.min(streamBuffer.length, streamShown + perFrame)
+      chat.messages = chat.messages.map((m) =>
+        m.id === tid ? { ...m, content: streamBuffer.slice(0, streamShown) } : m,
+      )
+      void scrollToBottom(false)
+    }
+    if (streamShown < streamBuffer.length) {
+      streamRaf = requestAnimationFrame(pumpTypewriter)
+    }
+  }
+
+  const schedulePump = () => {
+    if (streamRaf) return
+    streamRaf = requestAnimationFrame(pumpTypewriter)
+  }
+
+  const stopTypewriter = () => {
+    if (streamRaf) {
+      cancelAnimationFrame(streamRaf)
+      streamRaf = 0
+    }
+  }
 
   const assistantPlaceholder: ChatMessage = {
     id: `local-ai-${Date.now()}`,
@@ -321,6 +364,7 @@ function runStream(
     createdAt: new Date().toISOString(),
     metadata: null,
   }
+  streamTargetMessageId = assistantPlaceholder.id
   chat.messages = [...chat.messages, assistantPlaceholder]
 
   return chat
@@ -330,19 +374,20 @@ function runStream(
       modelContextJson: modelContextJson ?? undefined,
       onStart(id) {
         assistantId = id
-        assistantContent = ''
+        streamBuffer = ''
+        streamShown = 0
+        streamTargetMessageId = id
         chat.messages = chat.messages.map((m) =>
           m.id === assistantPlaceholder.id ? { ...m, id } : m,
         )
       },
       onDelta(chunk) {
-        assistantContent += chunk
-        chat.messages = chat.messages.map((m) =>
-          m.id === assistantId ? { ...m, content: assistantContent } : m,
-        )
-        void scrollToBottom(true)
+        streamBuffer += chunk
+        schedulePump()
       },
       async onDone() {
+        stopTypewriter()
+        flushStreamVisual()
         await chat.fetchMessages(sid)
         await chat.fetchSessions()
         syncUserEditsFromMessages()
@@ -351,6 +396,8 @@ function runStream(
       },
     })
     .catch((e: unknown) => {
+      stopTypewriter()
+      flushStreamVisual()
       if ((e as Error).name === 'AbortError') {
         ElMessage.info(t('errors.stopped'))
       } else {
@@ -411,8 +458,21 @@ async function resendUserMessage(userMsgId: string) {
   await runStream(text, undefined, userMsgId, null)
 }
 
-function setFeedback(msgId: string, v: 'up' | 'down') {
-  feedback[msgId] = feedback[msgId] === v ? null : v
+function feedbackVote(m: ChatMessage): 'up' | 'down' | null {
+  return parseFeedbackVote(m.metadata ?? undefined)
+}
+
+async function toggleFeedback(m: ChatMessage, v: 'up' | 'down') {
+  const sid = chat.activeSessionId
+  if (!sid || chat.sending) return
+  const cur = feedbackVote(m)
+  const vote = cur === v ? 'clear' : v
+  try {
+    const updated = await chatApi.setMessageFeedback(sid, m.id, vote)
+    chat.patchMessageMetadata(m.id, updated.metadata ?? null)
+  } catch (e) {
+    ElMessage.error((e as Error).message || t('errors.send'))
+  }
 }
 
 function speakAssistant(text: string) {
@@ -756,11 +816,12 @@ function askFollowUp(q: string) {
                     text
                     circle
                     class="msg-toolbar-btn"
-                    :type="feedback[m.id] === 'up' ? 'primary' : 'default'"
-                    @click="setFeedback(m.id, 'up')"
+                    :type="feedbackVote(m) === 'up' ? 'primary' : 'default'"
+                    :disabled="chat.sending"
+                    @click="toggleFeedback(m, 'up')"
                   >
-                    <span class="thumb-wrap" :class="{ muted: feedback[m.id] !== 'up' }">
-                      <IconThumbUp />
+                    <span class="thumb-wrap" :class="{ muted: feedbackVote(m) !== 'up' }">
+                      <IconHandUp />
                     </span>
                   </el-button>
                 </el-tooltip>
@@ -769,11 +830,12 @@ function askFollowUp(q: string) {
                     text
                     circle
                     class="msg-toolbar-btn"
-                    :type="feedback[m.id] === 'down' ? 'danger' : 'default'"
-                    @click="setFeedback(m.id, 'down')"
+                    :type="feedbackVote(m) === 'down' ? 'danger' : 'default'"
+                    :disabled="chat.sending"
+                    @click="toggleFeedback(m, 'down')"
                   >
-                    <span class="thumb-wrap" :class="{ muted: feedback[m.id] !== 'down' }">
-                      <IconThumbDown />
+                    <span class="thumb-wrap" :class="{ muted: feedbackVote(m) !== 'down' }">
+                      <IconHandDown />
                     </span>
                   </el-button>
                 </el-tooltip>

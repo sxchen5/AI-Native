@@ -120,6 +120,10 @@ export const useChatStore = defineStore('chat', () => {
     )
   }
 
+  function patchMessageMetadata(messageId: string, metadata: string | null) {
+    messages.value = messages.value.map((m) => (m.id === messageId ? { ...m, metadata } : m))
+  }
+
   async function deleteSession(sessionId: string) {
     await chatApi.deleteSession(sessionId)
     if (activeSessionId.value === sessionId) {
@@ -221,6 +225,7 @@ export const useChatStore = defineStore('chat', () => {
     renameSession,
     deleteSession,
     updateAssistantMessageContent,
+    patchMessageMetadata,
     stopStream,
     sendStream,
   }
