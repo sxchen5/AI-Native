@@ -301,8 +301,8 @@ public class ChatStreamController {
         }
         String title = titleAiService.summarizeConversationTitle(userText, assistantText);
         if (title.isBlank()) {
-            String u = firstLine(userText, 20);
-            String a = firstLine(assistantText, 16);
+            String u = firstLine(userText, 15);
+            String a = firstLine(assistantText, 15);
             if (u.isBlank() && a.isBlank()) {
                 return;
             }
@@ -313,11 +313,12 @@ public class ChatStreamController {
                 title = a;
             }
             else {
-                title = u + " · " + a;
-                if (title.length() > 40) {
-                    title = title.substring(0, 37) + "…";
-                }
+                String joined = u + "·" + a;
+                title = joined.length() <= 15 ? joined : (u.length() <= 15 ? u : u.substring(0, 14) + "…");
             }
+        }
+        if (title.length() > 15) {
+            title = title.substring(0, 14) + "…";
         }
         if (!title.isBlank()) {
             session.setTitle(title);

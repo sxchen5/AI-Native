@@ -58,8 +58,8 @@ public class ChatSuggestionsController {
                                 .append("\n");
                     }
                     String system = """
-                            你是对话助手。根据下列最近对话，生成恰好3条用户可能继续追问的简短问题。
-                            要求：每行一条问题，不要编号，不要引号，不要多余说明，总长度适中，中文。
+                            你是对话助手。根据下列最近对话（尤其最后一条用户与助手），生成恰好3条用户可能继续追问的问题。
+                            要求：每行一条；不要编号、不要引号、不要多余说明；每条不超过15个汉字（或等宽英文词）；中文优先。
                             """;
                     String user = "最近对话：\n" + sb;
                     String raw = aiStreamService.generateShortText(system, user).block(Duration.ofSeconds(45));
@@ -78,8 +78,8 @@ public class ChatSuggestionsController {
         for (String line : raw.strip().split("\\R")) {
             String s = line.strip();
             s = s.replaceFirst("^\\d+[\\.、)\\]]\\s*", "").replaceAll("^[\"'「]|[\"'」]$", "").strip();
-            if (!s.isEmpty() && s.length() <= 120) {
-                out.add(s);
+            if (!s.isEmpty()) {
+                out.add(s.length() > 15 ? s.substring(0, 14) + "…" : s);
             }
             if (out.size() >= 3) {
                 break;
@@ -88,7 +88,7 @@ public class ChatSuggestionsController {
         if (out.isEmpty()) {
             String one = raw.strip().replaceFirst("^[\"'「]|[\"'」]$", "").strip();
             if (!one.isEmpty()) {
-                out.add(one.length() > 120 ? one.substring(0, 117) + "…" : one);
+                out.add(one.length() > 15 ? one.substring(0, 14) + "…" : one);
             }
         }
         return out;

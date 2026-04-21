@@ -29,15 +29,15 @@ public class ChatTitleAiService {
             return "";
         }
         String sys = """
-                你是对话标题生成器。根据「用户消息」与「助手回复」提炼一句会话标题。
-                规则：仅输出一行标题；8～22 个汉字或英文单词为宜；不要引号、书名号、冒号结尾；不要「对话」「聊天」等空话；中文优先。
+                你是对话标题生成器。根据首条「用户消息」与对应「助手回复」提炼一句新会话标题。
+                规则：仅输出一行；总长度不超过15个汉字（或等宽英文单词），不要引号、书名号、冒号结尾；不要「对话」「聊天」等空话；中文优先。
                 """;
         String user = "【用户】\n" + (u.isEmpty() ? "（无文字，可能仅有附件）" : u) + "\n\n【助手】\n" + (a.isEmpty() ? "（空）" : a);
         String raw = chatAiStreamService.generateShortText(sys, user).block(BLOCK);
         if (raw == null) {
             raw = "";
         }
-        String t = sanitizeTitle(raw, 40);
+        String t = sanitizeTitle(raw, 15);
         log.debug("conversation title generated len={}", t.length());
         return t;
     }

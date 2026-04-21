@@ -51,6 +51,8 @@ const editingUserId = ref<string | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const uploadBusy = ref(false)
 const followUpQuestions = ref<string[]>([])
+/** 当前 SSE 正在输出的助手消息 id（首包前为占位 id），用于隐藏该条工具栏 */
+const streamingAssistantId = ref<string | null>(null)
 const docConvertBusyId = ref<string | null>(null)
 const pendingAttachments = ref<AttachmentChip[]>([])
 const voiceRecording = ref(false)
@@ -72,16 +74,30 @@ function isAssistantStreaming(m: ChatMessage) {
   return m.role === 'ASSISTANT' && m.content.length === 0 && chat.sending
 }
 
+function isAssistantStreamActive(m: ChatMessage) {
+  return m.role === 'ASSISTANT' && chat.sending && streamingAssistantId.value === m.id
+}
+
 function showUserToolbar(idx: number, m: ChatMessage) {
   if (m.role !== 'USER') return false
+  if (chat.sending && isLastMessage(idx)) return false
   if (editingUserId.value === m.id) return true
   return isLastMessage(idx) || !!hoveringRow[m.id]
 }
 
 function showAiToolbar(idx: number, m: ChatMessage) {
   if (m.role !== 'ASSISTANT') return false
-  if (isAssistantStreaming(m)) return false
+  if (chat.sending) return false
+  if (isAssistantStreaming(m) || isAssistantStreamActive(m)) return false
   return isLastMessage(idx) || !!hoveringRow[m.id]
+}
+
+function showInlineFollowUps(idx: number, m: ChatMessage) {
+  if (props.hideThreadHead) return false
+  if (!chat.activeSessionId || chat.loadingMessages || showLanding.value) return false
+  if (m.role !== 'ASSISTANT' || docMeta(m)) return false
+  if (!isLastMessage(idx) || chat.sending) return false
+  return followUpQuestions.value.length > 0
 }
 
 function onRowHover(messageId: string, inside: boolean) {
@@ -143,6 +159,7 @@ watch(
   () => {
     editingUserId.value = null
     followUpQuestions.value = []
+    streamingAssistantId.value = null
     void scrollToBottom(false)
     void nextTick(() => updateScrollBottomState())
   },
@@ -153,7 +170,6 @@ watch(
   (v) => {
     if (!v) {
       void nextTick(() => updateScrollBottomState())
-      void loadFollowUps()
     }
   },
 )
@@ -362,6 +378,8 @@ function runStream(
     metadata: null,
   }
   streamTargetMessageId = assistantPlaceholder.id
+  streamingAssistantId.value = assistantPlaceholder.id
+  followUpQuestions.value = []
   chat.messages = [...chat.messages, assistantPlaceholder]
 
   return chat
@@ -374,6 +392,7 @@ function runStream(
         streamBuffer = ''
         streamShown = 0
         streamTargetMessageId = id
+        streamingAssistantId.value = id
         chat.messages = chat.messages.map((m) =>
           m.id === assistantPlaceholder.id ? { ...m, id } : m,
         )
@@ -385,6 +404,7 @@ function runStream(
       async onDone() {
         stopTypewriter()
         flushStreamVisual()
+        streamingAssistantId.value = null
         await chat.fetchMessages(sid)
         await chat.fetchSessions()
         syncUserEditsFromMessages()
@@ -395,6 +415,7 @@ function runStream(
     .catch((e: unknown) => {
       stopTypewriter()
       flushStreamVisual()
+      streamingAssistantId.value = null
       if ((e as Error).name === 'AbortError') {
         ElMessage.info(t('errors.stopped'))
       } else {
@@ -769,6 +790,7 @@ function askFollowUp(q: string) {
             <div
               v-if="m.role === 'ASSISTANT' && docMeta(m)"
               class="ai-toolbar-slot"
+              :class="{ 'ai-toolbar-slot--streaming': chat.sending && isLastMessage(idx) }"
             >
               <div class="ai-toolbar" :class="{ 'ai-toolbar--visible': showAiToolbar(idx, m) }">
                 <el-tooltip hide-after="0" :content="t('chat.copy')" placement="top">
@@ -852,6 +874,23 @@ function askFollowUp(q: string) {
                 </el-tooltip>
               </div>
             </div>
+
+            <div v-if="showInlineFollowUps(idx, m)" class="follow-up-inline">
+              <span class="follow-up-inline-title">{{ t('chat.followUpTitle') }}</span>
+              <div class="follow-up-inline-chips">
+                <button
+                  v-for="(q, i) in followUpQuestions"
+                  :key="i"
+                  type="button"
+                  class="follow-chip follow-chip--inline"
+                  :disabled="chat.sending"
+                  @click="askFollowUp(q)"
+                >
+                  <span class="follow-chip-text">{{ q }}</span>
+                  <span class="follow-chip-arrow" aria-hidden="true">→</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
         <div ref="bottomAnchor" class="anchor" />
@@ -866,34 +905,6 @@ function askFollowUp(q: string) {
               </el-button>
             </el-tooltip>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <div
-      v-if="
-        followUpQuestions.length > 0 &&
-        chat.activeSessionId &&
-        !chat.loadingMessages &&
-        !showLanding &&
-        !props.hideThreadHead
-      "
-      class="follow-up-bar"
-    >
-      <div class="follow-up-inner">
-        <span class="follow-up-title">{{ t('chat.followUpTitle') }}</span>
-        <div class="follow-up-chips">
-          <button
-            v-for="(q, i) in followUpQuestions"
-            :key="i"
-            type="button"
-            class="follow-chip"
-            :disabled="chat.sending"
-            @click="askFollowUp(q)"
-          >
-            <span class="follow-chip-text">{{ q }}</span>
-            <span class="follow-chip-arrow" aria-hidden="true">→</span>
-          </button>
         </div>
       </div>
     </div>
@@ -1166,19 +1177,13 @@ function askFollowUp(q: string) {
   pointer-events: auto;
 }
 
-.follow-up-bar {
-  flex-shrink: 0;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--bg-chat-surface);
-  padding: 10px 16px 12px;
+.follow-up-inline {
+  margin-top: 10px;
+  width: 100%;
+  max-width: min(640px, 100%);
 }
 
-.follow-up-inner {
-  max-width: 880px;
-  margin: 0 auto;
-}
-
-.follow-up-title {
+.follow-up-inline-title {
   display: block;
   font-size: 12px;
   font-weight: 700;
@@ -1186,20 +1191,23 @@ function askFollowUp(q: string) {
   margin-bottom: 8px;
 }
 
-.follow-up-chips {
+.follow-up-inline-chips {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 8px;
 }
 
 .follow-chip {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  width: 100%;
+  gap: 10px;
+  width: auto;
+  max-width: 100%;
+  box-sizing: border-box;
   text-align: left;
-  padding: 12px 14px;
+  padding: 10px 14px;
   border-radius: 12px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-input-fill);
@@ -1210,6 +1218,10 @@ function askFollowUp(q: string) {
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
+}
+
+.follow-chip--inline {
+  white-space: nowrap;
 }
 
 .follow-chip:hover:not(:disabled) {
@@ -1223,9 +1235,11 @@ function askFollowUp(q: string) {
 }
 
 .follow-chip-text {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .follow-chip-arrow {
