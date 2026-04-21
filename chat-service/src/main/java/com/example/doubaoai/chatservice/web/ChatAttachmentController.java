@@ -50,8 +50,12 @@ public class ChatAttachmentController {
                 || lower.endsWith(".log") || lower.endsWith(".yml") || lower.endsWith(".yaml")) {
             text = new String(file.getBytes(), StandardCharsets.UTF_8);
         }
+        else if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg")
+                || lower.endsWith(".gif") || lower.endsWith(".webp") || lower.endsWith(".bmp")) {
+            text = "[图片] " + name + "\n（当前服务端未做图像识别，请结合用户文字说明作答。）";
+        }
         else {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "不支持的格式，请上传 pdf、docx 或 txt/md/json 等纯文本类文件");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "不支持的格式，请上传 pdf、docx、图片或 txt/md/json 等纯文本类文件");
         }
         String cleaned = text == null ? "" : text.strip();
         if (cleaned.length() > 400_000) {
@@ -60,7 +64,8 @@ public class ChatAttachmentController {
         if (cleaned.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "未能从文件中解析出文本内容");
         }
-        return Map.of("fileName", name, "text", cleaned);
+        String mime = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
+        return Map.of("fileName", name, "mimeType", mime, "text", cleaned);
     }
 
     private static String extractPdf(InputStream in) throws IOException {

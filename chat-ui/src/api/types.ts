@@ -25,7 +25,7 @@ export type ChatMessage = {
   metadata?: string | null
 }
 
-export type ExtractedAttachment = { fileName: string; text: string }
+export type ExtractedAttachment = { fileName: string; mimeType: string; text: string }
 
 export type SseEnvelope =
   | { type: 'start'; assistantMessageId: string; text?: string; message?: string }

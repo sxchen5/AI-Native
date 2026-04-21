@@ -30,16 +30,27 @@ public class ChatAiStreamService {
     private static final Logger log = LoggerFactory.getLogger(ChatAiStreamService.class);
 
     private final ChatClient chatClient;
+    private final UserMessageComposer userMessageComposer;
 
-    public ChatAiStreamService(ChatClient chatClient) {
+    public ChatAiStreamService(ChatClient chatClient, UserMessageComposer userMessageComposer) {
         this.chatClient = chatClient;
+        this.userMessageComposer = userMessageComposer;
     }
 
-    /**
-     * 将历史消息（不含本轮用户输入）与本轮用户输入组装为 Prompt，返回模型增量输出流。
-     */
-    public Flux<String> streamReply(List<StoredMessage> historyBeforeCurrentUser, String latestUserText) {
-        List<Message> messages = buildChatMessages(historyBeforeCurrentUser, latestUserText, false);
+    public Flux<String> streamReply(List<StoredMessage> historyBeforeCurrentUser, String latestDisplayText,
+            String latestModelContextJson) {
+        List<Message> messages = buildMessages(historyBeforeCurrentUser, latestDisplayText, latestModelContextJson, false);
+        return streamFromMessages(messages);
+    }
+
+    public Flux<String> streamReplyAppend(List<StoredMessage> historyExcludingLatestUserAndPlaceholder,
+            String latestDisplayText,
+            String latestModelContextJson) {
+        List<Message> messages = buildMessages(historyExcludingLatestUserAndPlaceholder, latestDisplayText, latestModelContextJson, true);
+        return streamFromMessages(messages);
+    }
+
+    private Flux<String> streamFromMessages(List<Message> messages) {
         Prompt prompt = new Prompt(messages);
         return chatClient.prompt(prompt)
                 .stream()
@@ -48,20 +59,8 @@ public class ChatAiStreamService {
                 .doOnError(e -> log.error("模型流式输出失败", e));
     }
 
-    /**
-     * 追加新用户消息时使用：不把历史截断为「仅上一轮」，而是使用去掉末尾「用户+空助手占位」后的完整上文。
-     */
-    public Flux<String> streamReplyAppend(List<StoredMessage> historyExcludingLatestUserAndPlaceholder, String latestUserText) {
-        List<Message> messages = buildChatMessages(historyExcludingLatestUserAndPlaceholder, latestUserText, true);
-        Prompt prompt = new Prompt(messages);
-        return chatClient.prompt(prompt)
-                .stream()
-                .content()
-                .subscribeOn(Schedulers.boundedElastic())
-                .doOnError(e -> log.error("模型流式输出失败", e));
-    }
-
-    private static List<Message> buildChatMessages(List<StoredMessage> history, String latestUserText, boolean longContext) {
+    private List<Message> buildMessages(List<StoredMessage> history, String latestDisplay, String latestContextJson,
+            boolean longContext) {
         List<Message> messages = new ArrayList<>();
         String sys = longContext
                 ? """
@@ -73,19 +72,16 @@ public class ChatAiStreamService {
         messages.add(new SystemMessage(sys));
         for (StoredMessage m : history) {
             if (m.role() == ChatRole.USER) {
-                messages.add(new UserMessage(m.content()));
+                messages.add(new UserMessage(userMessageComposer.textForHistoryUser(m)));
             }
             else if (m.role() == ChatRole.ASSISTANT) {
                 messages.add(new AssistantMessage(m.content()));
             }
         }
-        messages.add(new UserMessage(latestUserText));
+        messages.add(userMessageComposer.toModelUserMessage(latestDisplay, latestContextJson));
         return messages;
     }
 
-    /**
-     * 非流式短文本生成（如猜你想问），失败时返回空串。
-     */
     public Mono<String> generateShortText(String systemPrompt, String userPrompt) {
         Prompt prompt = new Prompt(
                 new SystemMessage(systemPrompt),

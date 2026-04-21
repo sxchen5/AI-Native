@@ -10,11 +10,12 @@ import {
   Loading,
   Microphone,
   Paperclip,
+  Picture,
   Promotion,
   TopRight,
 } from '@element-plus/icons-vue'
 import { FullScreen } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -27,6 +28,8 @@ import { markdownToPlainText } from '../utils/plainText'
 import IconThumbDown from './icons/IconThumbDown.vue'
 import IconThumbUp from './icons/IconThumbUp.vue'
 import { parseDocumentMeta } from '../utils/documentMeta'
+import type { AttachmentChip } from '../utils/modelContext'
+import { parseUserBubbleFromMetadata } from '../utils/modelContext'
 
 const { t, tm } = useI18n()
 const router = useRouter()
@@ -49,6 +52,12 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const uploadBusy = ref(false)
 const followUpQuestions = ref<string[]>([])
 const docConvertBusyId = ref<string | null>(null)
+const pendingAttachments = ref<AttachmentChip[]>([])
+const pendingVoiceTranscript = ref('')
+const voiceRecording = ref(false)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let speechRec: any = null
+const imageInputRef = ref<HTMLInputElement | null>(null)
 
 function md(html: string) {
   return renderAiMarkdown(html)
@@ -164,6 +173,12 @@ onBeforeUnmount(() => {
   if (scrollThumbTimer) clearTimeout(scrollThumbTimer)
   msgScrollEl.value?.classList.remove('u-scroll--active')
   window.removeEventListener('resize', updateScrollBottomState)
+  try {
+    speechRec?.stop()
+  } catch {
+    /* ignore */
+  }
+  speechRec = null
 })
 
 async function copyText(text: string) {
@@ -182,10 +197,117 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
+function buildModelContextJson(): string | null {
+  const atts = pendingAttachments.value.map((a) => ({
+    fileName: a.fileName,
+    mimeType: a.mimeType,
+    extractedText: a.extractedText,
+  }))
+  const chips = pendingAttachments.value.map((a) => ({
+    label: a.label,
+    kind: a.kind,
+  }))
+  if (pendingVoiceTranscript.value.trim()) {
+    chips.push({ label: t('chat.voiceChip'), kind: 'voice' })
+  }
+  const payload: Record<string, unknown> = {}
+  if (pendingVoiceTranscript.value.trim()) {
+    payload.voiceTranscript = pendingVoiceTranscript.value.trim()
+  }
+  if (atts.length) payload.attachments = atts
+  if (chips.length) payload.userBubble = { chips }
+  if (Object.keys(payload).length === 0) return null
+  return JSON.stringify(payload)
+}
+
+function buildUserMetadataForSend(): string | null {
+  const ctx = buildModelContextJson()
+  if (!ctx) return null
+  return ctx
+}
+
+function userBubbleChips(m: ChatMessage) {
+  return parseUserBubbleFromMetadata(m.metadata)?.chips ?? []
+}
+
+function removePendingAttachment(i: number) {
+  pendingAttachments.value = pendingAttachments.value.filter((_, idx) => idx !== i)
+}
+
+function clearPendingContext() {
+  pendingAttachments.value = []
+  pendingVoiceTranscript.value = ''
+}
+
+function toggleVoice() {
+  type SpeechRecCtor = new () => { start: () => void; stop: () => void; lang: string; continuous: boolean; interimResults: boolean; onresult: ((ev: unknown) => void) | null; onerror: (() => void) | null; onend: (() => void) | null }
+  const w = window as unknown as { SpeechRecognition?: SpeechRecCtor; webkitSpeechRecognition?: SpeechRecCtor }
+  const SR = w.SpeechRecognition || w.webkitSpeechRecognition
+  if (!SR) {
+    ElMessage.warning(t('chat.voiceUnsupported'))
+    return
+  }
+  if (voiceRecording.value) {
+    speechRec?.stop()
+    return
+  }
+  speechRec = new SR()
+  speechRec.lang = navigator.language.startsWith('zh') ? 'zh-CN' : 'en-US'
+  speechRec.continuous = false
+  speechRec.interimResults = true
+  speechRec.onresult = (ev: { resultIndex: number; results: { length: number; [i: number]: { 0: { transcript: string } } } }) => {
+    let piece = ''
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      piece += ev.results[i]![0]!.transcript
+    }
+    pendingVoiceTranscript.value = (pendingVoiceTranscript.value + piece).trimStart()
+  }
+  speechRec.onerror = () => {
+    voiceRecording.value = false
+  }
+  speechRec.onend = () => {
+    voiceRecording.value = false
+    speechRec = null
+  }
+  voiceRecording.value = true
+  speechRec.start()
+}
+
+function openImagePicker() {
+  imageInputRef.value?.click()
+}
+
+async function onImageSelected(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.warning(t('errors.fileTooLarge'))
+    return
+  }
+  uploadBusy.value = true
+  try {
+    const { fileName, mimeType, text } = await chatApi.extractAttachmentText(file)
+    pendingAttachments.value.push({
+      label: fileName,
+      kind: 'image',
+      fileName,
+      mimeType,
+      extractedText: text,
+    })
+  } catch (err) {
+    ElMessage.error((err as Error).message || t('chat.uploadFail'))
+  } finally {
+    uploadBusy.value = false
+  }
+}
+
 function runStream(
   userText: string,
   restartFromUserMessageId: string | undefined,
   appendAfterUserMessageId: string | undefined,
+  modelContextJson: string | null | undefined,
   afterDone?: () => void,
 ) {
   const sid = chat.activeSessionId!
@@ -205,6 +327,7 @@ function runStream(
     .sendStream(sid, userText, {
       restartFromUserMessageId: restartFromUserMessageId ?? undefined,
       appendAfterUserMessageId: appendAfterUserMessageId ?? undefined,
+      modelContextJson: modelContextJson ?? undefined,
       onStart(id) {
         assistantId = id
         assistantContent = ''
@@ -240,23 +363,28 @@ function runStream(
 async function onSend() {
   const sid = chat.activeSessionId
   const text = chat.inputDraft.trim()
-  if (!sid || !text || chat.sending) return
+  const hasCtx = pendingAttachments.value.length > 0 || pendingVoiceTranscript.value.trim().length > 0
+  if (!sid || chat.sending) return
+  if (!text && !hasCtx) return
 
+  const ctxJson = buildModelContextJson()
+  const meta = buildUserMetadataForSend()
   chat.inputDraft = ''
+  clearPendingContext()
 
   const userMsg: ChatMessage = {
     id: `local-user-${Date.now()}`,
     role: 'USER',
     content: text,
     createdAt: new Date().toISOString(),
-    metadata: null,
+    metadata: meta,
   }
   chat.messages = [...chat.messages, userMsg]
   userEdits[userMsg.id] = text
   editingUserId.value = null
   await scrollToBottom(false)
 
-  await runStream(text, undefined, undefined)
+  await runStream(text, undefined, undefined, ctxJson)
 }
 
 function startUserEdit(m: ChatMessage) {
@@ -280,7 +408,7 @@ async function resendUserMessage(userMsgId: string) {
     return
   }
   editingUserId.value = null
-  await runStream(text, undefined, userMsgId)
+  await runStream(text, undefined, userMsgId, null)
 }
 
 function setFeedback(msgId: string, v: 'up' | 'down') {
@@ -371,15 +499,40 @@ async function onFileSelected(e: Event) {
   }
   uploadBusy.value = true
   try {
-    const { fileName, text } = await chatApi.extractAttachmentText(file)
-    const prefix = t('chat.filePrefix', { name: fileName })
-    const cur = chat.inputDraft
-    chat.inputDraft = cur ? `${cur.trimEnd()}\n\n${prefix}${text}` : `${prefix}${text}`
+    const { fileName, mimeType, text } = await chatApi.extractAttachmentText(file)
+    const isImg = mimeType.startsWith('image/')
+    pendingAttachments.value.push({
+      label: fileName,
+      kind: isImg ? 'image' : 'file',
+      fileName,
+      mimeType,
+      extractedText: text,
+    })
     ElMessage.success(t('chat.uploadOk'))
   } catch (err) {
     ElMessage.error((err as Error).message || t('chat.uploadFail'))
   } finally {
     uploadBusy.value = false
+  }
+}
+
+async function renameSessionTitle() {
+  const sid = chat.activeSessionId
+  if (!sid) return
+  const cur = chat.activeSession?.title || ''
+  try {
+    const { value } = await ElMessageBox.prompt(t('session.renamePlaceholder'), t('session.renameTitle'), {
+      inputValue: cur,
+      confirmButtonText: t('session.save'),
+      cancelButtonText: t('session.cancel'),
+      inputPattern: /\S+/,
+      inputErrorMessage: t('session.titleRequired'),
+    })
+    await chat.renameSession(sid, value)
+    await chat.fetchSessions()
+    ElMessage.success(t('session.save'))
+  } catch {
+    /* cancel */
   }
 }
 
@@ -416,7 +569,7 @@ function askFollowUp(q: string) {
         <span class="embed-title">{{ chat.activeSession?.title || t('session.defaultTitle') }}</span>
         <span class="embed-sub">{{ t('chat.landDisclaimer') }}</span>
       </div>
-      <el-tooltip :content="t('chat.fullChatView')" placement="bottom">
+      <el-tooltip hide-after="0" :content="t('chat.fullChatView')" placement="bottom">
         <el-button text circle size="small" @click="goFullChat">
           <el-icon><FullScreen /></el-icon>
         </el-button>
@@ -425,7 +578,9 @@ function askFollowUp(q: string) {
 
     <header v-if="chat.activeSessionId && !props.hideThreadHead" class="thread-head">
       <div class="thread-head-inner">
-        <h1 class="thread-title">{{ chat.activeSession?.title || t('session.defaultTitle') }}</h1>
+        <button type="button" class="thread-title thread-title--btn" @click="renameSessionTitle">
+          {{ chat.activeSession?.title || t('session.defaultTitle') }}
+        </button>
         <p class="thread-sub">{{ t('app.tagline') }}</p>
       </div>
     </header>
@@ -476,21 +631,26 @@ function askFollowUp(q: string) {
                 />
               </template>
               <div v-else class="user-read">
-                {{ userEdits[m.id] ?? m.content }}
+                <div v-if="userBubbleChips(m).length" class="user-chip-row">
+                  <span v-for="(c, ci) in userBubbleChips(m)" :key="ci" class="user-chip">{{ c.label }}</span>
+                </div>
+                <div v-if="(userEdits[m.id] ?? m.content).trim()" class="user-text-line">
+                  {{ userEdits[m.id] ?? m.content }}
+                </div>
               </div>
               <div class="user-actions" :class="{ 'user-actions--visible': showUserToolbar(idx, m) }">
                 <template v-if="editingUserId === m.id">
-                  <el-tooltip :content="t('chat.cancelEdit')" placement="top">
+                  <el-tooltip hide-after="0" :content="t('chat.cancelEdit')" placement="top">
                     <el-button text circle class="msg-toolbar-btn" @click="cancelUserEdit(m)">
                       <el-icon><Close /></el-icon>
                     </el-button>
                   </el-tooltip>
-                  <el-tooltip :content="t('chat.copy')" placement="top">
+                  <el-tooltip hide-after="0" :content="t('chat.copy')" placement="top">
                     <el-button text circle class="msg-toolbar-btn" @click="copyText(userEdits[m.id] || '')">
                       <el-icon><DocumentCopy /></el-icon>
                     </el-button>
                   </el-tooltip>
-                  <el-tooltip :content="t('chat.resend')" placement="top">
+                  <el-tooltip hide-after="0" :content="t('chat.resend')" placement="top">
                     <el-button
                       text
                       circle
@@ -504,12 +664,12 @@ function askFollowUp(q: string) {
                   </el-tooltip>
                 </template>
                 <template v-else>
-                  <el-tooltip :content="t('chat.copy')" placement="top">
+                  <el-tooltip hide-after="0" :content="t('chat.copy')" placement="top">
                     <el-button text circle class="msg-toolbar-btn" @click="copyText(userEdits[m.id] || '')">
                       <el-icon><DocumentCopy /></el-icon>
                     </el-button>
                   </el-tooltip>
-                  <el-tooltip :content="t('chat.edit')" placement="top">
+                  <el-tooltip hide-after="0" :content="t('chat.edit')" placement="top">
                     <el-button text circle class="msg-toolbar-btn" :disabled="chat.sending" @click="startUserEdit(m)">
                       <el-icon><Edit /></el-icon>
                     </el-button>
@@ -549,22 +709,22 @@ function askFollowUp(q: string) {
               class="ai-toolbar-slot"
             >
               <div class="ai-toolbar" :class="{ 'ai-toolbar--visible': showAiToolbar(idx, m) }">
-                <el-tooltip :content="t('chat.copy')" placement="top">
+                <el-tooltip hide-after="0" :content="t('chat.copy')" placement="top">
                   <el-button text circle class="msg-toolbar-btn" @click="copyText(docMeta(m)!.markdownBody)">
                     <el-icon><DocumentCopy /></el-icon>
                   </el-button>
                 </el-tooltip>
-                <el-tooltip :content="t('chat.downloadDoc')" placement="top">
+                <el-tooltip hide-after="0" :content="t('chat.downloadDoc')" placement="top">
                   <el-button text circle class="msg-toolbar-btn" @click="downloadDocMarkdown(docMeta(m)!)">
                     <el-icon><Download /></el-icon>
                   </el-button>
                 </el-tooltip>
-                <el-tooltip :content="docMeta(m)!.frozen ? t('chat.openDocView') : t('chat.openDocEdit')" placement="top">
+                <el-tooltip hide-after="0" :content="docMeta(m)!.frozen ? t('chat.openDocView') : t('chat.openDocEdit')" placement="top">
                   <el-button text circle class="msg-toolbar-btn" @click="docMeta(m)!.frozen ? openCanvasReadOnly(m) : openCanvasEdit(m)">
                     <el-icon><TopRight /></el-icon>
                   </el-button>
                 </el-tooltip>
-                <el-tooltip :content="t('chat.speak')" placement="top">
+                <el-tooltip hide-after="0" :content="t('chat.speak')" placement="top">
                   <el-button text circle class="msg-toolbar-btn" @click="speakAssistant(docMeta(m)!.markdownBody)">
                     <el-icon><Microphone /></el-icon>
                   </el-button>
@@ -578,12 +738,12 @@ function askFollowUp(q: string) {
               :class="{ 'ai-toolbar-slot--streaming': isAssistantStreaming(m) }"
             >
               <div class="ai-toolbar" :class="{ 'ai-toolbar--visible': showAiToolbar(idx, m) }">
-                <el-tooltip :content="t('chat.copy')" placement="top">
+                <el-tooltip hide-after="0" :content="t('chat.copy')" placement="top">
                   <el-button text circle class="msg-toolbar-btn" @click="copyText(m.content)">
                     <el-icon><DocumentCopy /></el-icon>
                   </el-button>
                 </el-tooltip>
-                <el-tooltip :content="t('chat.like')" placement="top">
+                <el-tooltip hide-after="0" :content="t('chat.like')" placement="top">
                   <el-button
                     text
                     circle
@@ -596,7 +756,7 @@ function askFollowUp(q: string) {
                     </span>
                   </el-button>
                 </el-tooltip>
-                <el-tooltip :content="t('chat.dislike')" placement="top">
+                <el-tooltip hide-after="0" :content="t('chat.dislike')" placement="top">
                   <el-button
                     text
                     circle
@@ -609,12 +769,12 @@ function askFollowUp(q: string) {
                     </span>
                   </el-button>
                 </el-tooltip>
-                <el-tooltip :content="t('chat.speak')" placement="top">
+                <el-tooltip hide-after="0" :content="t('chat.speak')" placement="top">
                   <el-button text circle class="msg-toolbar-btn" @click="speakAssistant(m.content)">
                     <el-icon><Microphone /></el-icon>
                   </el-button>
                 </el-tooltip>
-                <el-tooltip :content="t('chat.toCanvas')" placement="top">
+                <el-tooltip hide-after="0" :content="t('chat.toCanvas')" placement="top">
                   <el-button
                     text
                     circle
@@ -667,7 +827,7 @@ function askFollowUp(q: string) {
         v-if="showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding"
         class="jump-wrap"
       >
-        <el-tooltip :content="t('chat.jumpToBottom')" placement="top">
+        <el-tooltip hide-after="0" :content="t('chat.jumpToBottom')" placement="top">
           <el-button class="jump-btn" circle @click="jumpToLatest">
             <el-icon :size="18"><ArrowDown /></el-icon>
           </el-button>
@@ -681,6 +841,27 @@ function askFollowUp(q: string) {
           accept=".pdf,.doc,.docx,.txt,.md,.csv,.json,.xml,.html,.htm,.log,.yml,.yaml"
           @change="onFileSelected"
         />
+        <input
+          ref="imageInputRef"
+          type="file"
+          class="file-input"
+          accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
+          @change="onImageSelected"
+        />
+        <div v-if="pendingAttachments.length || pendingVoiceTranscript" class="pending-chips">
+          <span v-for="(a, pi) in pendingAttachments" :key="pi" class="pending-chip">
+            {{ a.label }}
+            <button type="button" class="pending-chip-x" :aria-label="t('chat.removeAttachment')" @click="removePendingAttachment(pi)">
+              ×
+            </button>
+          </span>
+          <span v-if="pendingVoiceTranscript" class="pending-chip pending-chip--voice">
+            {{ t('chat.voiceChip') }}
+            <button type="button" class="pending-chip-x" :aria-label="t('chat.clearVoice')" @click="pendingVoiceTranscript = ''">
+              ×
+            </button>
+          </span>
+        </div>
         <el-input
           v-model="chat.inputDraft"
           type="textarea"
@@ -691,7 +872,28 @@ function askFollowUp(q: string) {
           :disabled="!chat.activeSessionId || uploadBusy"
           @keydown="onKeydown"
         />
-        <el-tooltip :content="t('chat.upload')" placement="top">
+        <el-tooltip hide-after="0" :content="t('chat.uploadImage')" placement="top">
+          <el-button
+            class="image-fab"
+            circle
+            :disabled="!chat.activeSessionId || chat.sending || uploadBusy"
+            @click="openImagePicker"
+          >
+            <el-icon class="fab-icon"><Picture /></el-icon>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip hide-after="0" :content="voiceRecording ? t('chat.voiceStop') : t('chat.voiceStart')" placement="top">
+          <el-button
+            class="mic-fab"
+            circle
+            :type="voiceRecording ? 'danger' : 'default'"
+            :disabled="!chat.activeSessionId || chat.sending || uploadBusy"
+            @click="toggleVoice"
+          >
+            <el-icon class="fab-icon"><Microphone /></el-icon>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip hide-after="0" :content="t('chat.upload')" placement="top">
           <el-button
             class="attach-fab"
             circle
@@ -702,12 +904,19 @@ function askFollowUp(q: string) {
             <el-icon class="fab-icon"><Paperclip /></el-icon>
           </el-button>
         </el-tooltip>
-        <el-tooltip :content="chat.sending ? t('chat.stop') : t('chat.send')" placement="top">
+        <el-tooltip hide-after="0" :content="chat.sending ? t('chat.stop') : t('chat.send')" placement="top">
           <el-button
             class="send-fab"
             type="primary"
             circle
-            :disabled="!chat.activeSessionId || (!chat.sending && !chat.inputDraft.trim()) || uploadBusy"
+            :disabled="
+              !chat.activeSessionId ||
+              (!chat.sending &&
+                !chat.inputDraft.trim() &&
+                pendingAttachments.length === 0 &&
+                !pendingVoiceTranscript.trim()) ||
+              uploadBusy
+            "
             @click="chat.sending ? chat.stopStream() : onSend()"
           >
             <el-icon v-if="chat.sending" class="fab-icon"><CircleClose /></el-icon>
@@ -849,6 +1058,20 @@ function askFollowUp(q: string) {
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text-primary);
+}
+.thread-title--btn {
+  display: inline-block;
+  max-width: 100%;
+  cursor: pointer;
+  background: none;
+  border: none;
+  font: inherit;
+  padding: 2px 8px;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+.thread-title--btn:hover {
+  background: var(--bg-input-fill);
 }
 
 .thread-sub {
@@ -1115,6 +1338,27 @@ html.dark .jump-btn {
   white-space: pre-wrap;
   word-break: break-word;
 }
+.user-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+}
+.user-text-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
 .user-input :deep(.el-textarea__inner) {
   border-radius: 12px;
@@ -1255,6 +1499,41 @@ html.dark .composer {
   margin: 0 auto;
 }
 
+.pending-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.pending-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 8px 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-input-fill);
+  border: 1px solid var(--border-subtle);
+}
+.pending-chip--voice {
+  border-color: var(--accent-soft);
+  color: var(--accent);
+}
+.pending-chip-x {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 4px;
+  color: var(--text-muted);
+}
+.pending-chip-x:hover {
+  color: var(--text-primary);
+}
+
 .file-input {
   position: absolute;
   width: 0;
@@ -1265,12 +1544,35 @@ html.dark .composer {
 
 .composer-input :deep(.el-textarea__inner) {
   border-radius: var(--radius-lg, 14px);
-  padding: 12px 100px 12px 14px;
+  padding: 12px 168px 12px 14px;
   min-height: 88px !important;
   background: var(--bg-elevated) !important;
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.image-fab {
+  position: absolute;
+  right: 142px;
+  bottom: 10px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border-subtle) !important;
+  background: var(--bg-elevated) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: var(--shadow-sm);
+}
+.mic-fab {
+  position: absolute;
+  right: 98px;
+  bottom: 10px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border-subtle) !important;
+  background: var(--bg-elevated) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: var(--shadow-sm);
 }
 
 .attach-fab {
@@ -1298,31 +1600,29 @@ html.dark .composer {
 }
 
 .msg-toolbar-btn {
-  width: 36px !important;
-  height: 36px !important;
-  min-height: 36px !important;
+  width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
   padding: 0 !important;
-  margin: 0 2px !important;
-  border: 1px solid var(--border-subtle) !important;
-  background: var(--bg-elevated) !important;
+  margin: 0 4px !important;
+  border: none !important;
+  background: transparent !important;
   color: var(--text-secondary) !important;
-  box-shadow: none;
+  box-shadow: none !important;
 }
 .msg-toolbar-btn:hover {
-  border-color: var(--accent-soft) !important;
   color: var(--text-primary) !important;
+  background: var(--bg-input-fill) !important;
 }
 .msg-toolbar-btn.is-text.el-button--primary {
-  border-color: var(--accent-soft) !important;
   color: var(--accent) !important;
-  background: var(--bg-elevated) !important;
+  background: transparent !important;
 }
 .msg-toolbar-btn.is-text.el-button--danger {
-  border-color: rgba(239, 68, 68, 0.25) !important;
   color: #ef4444 !important;
-  background: var(--bg-elevated) !important;
+  background: transparent !important;
 }
 .msg-toolbar-btn :deep(.el-icon) {
-  font-size: 18px;
+  font-size: 16px;
 }
 </style>

@@ -16,6 +16,7 @@ import com.example.doubaoai.chatservice.domain.ChatRole;
 import com.example.doubaoai.chatservice.domain.ChatSession;
 import com.example.doubaoai.chatservice.domain.StoredMessage;
 import com.example.doubaoai.chatservice.service.ChatAiStreamService;
+import com.example.doubaoai.chatservice.service.UserMessageComposer;
 import com.example.doubaoai.chatservice.store.InMemoryChatStore;
 import com.example.doubaoai.chatservice.web.dto.ChatStreamRequest;
 import com.example.doubaoai.chatservice.web.dto.SseEventDto;
@@ -34,11 +35,14 @@ public class ChatStreamController {
 
     private final InMemoryChatStore store;
     private final ChatAiStreamService aiStreamService;
+    private final UserMessageComposer userMessageComposer;
     private final ObjectMapper objectMapper;
 
-    public ChatStreamController(InMemoryChatStore store, ChatAiStreamService aiStreamService, ObjectMapper objectMapper) {
+    public ChatStreamController(InMemoryChatStore store, ChatAiStreamService aiStreamService,
+            UserMessageComposer userMessageComposer, ObjectMapper objectMapper) {
         this.store = store;
         this.aiStreamService = aiStreamService;
+        this.userMessageComposer = userMessageComposer;
         this.objectMapper = objectMapper;
     }
 
@@ -61,7 +65,8 @@ public class ChatStreamController {
         final String restartId = request.restartFromUserMessageId();
         final String appendAfterId = request.appendAfterUserMessageId();
         final String rawContent = request.content() == null ? "" : request.content();
-        final String userText;
+        final String ctxJson = request.modelContextJson();
+        String displayText;
         final boolean appendMode = appendAfterId != null && !appendAfterId.isBlank();
 
         if (appendMode) {
@@ -92,11 +97,11 @@ public class ChatStreamController {
                 emitter.complete();
                 return emitter;
             }
-            userText = rawContent.strip();
-            if (userText.isEmpty()) {
-                userText = anchor.content() == null ? "" : anchor.content();
+            displayText = rawContent.strip().isEmpty() ? (anchor.content() == null ? "" : anchor.content()) : rawContent.strip();
+            if (displayText.isBlank()) {
+                displayText = userMessageComposer.fallbackDisplayFromContext(ctxJson);
             }
-            if (userText.isBlank()) {
+            if (displayText.isBlank()) {
                 try {
                     emitter.send(SseEmitter.event()
                             .data(objectMapper.writeValueAsString(SseEventDto.error("内容不能为空"))));
@@ -107,7 +112,9 @@ public class ChatStreamController {
                 emitter.complete();
                 return emitter;
             }
-            store.appendUserMessage(request.sessionId(), userText, anchor.metadata());
+            String modelMerged = userMessageComposer.mergeForModel(displayText, ctxJson);
+            String meta = userMessageComposer.buildUserMessageMetadata(ctxJson, modelMerged);
+            store.appendUserMessage(request.sessionId(), displayText, meta);
         }
         else if (restartId != null && !restartId.isBlank()) {
             List<StoredMessage> snap = session.historySnapshot();
@@ -130,12 +137,11 @@ public class ChatStreamController {
             if (effective.isEmpty()) {
                 effective = userMsg.content();
             }
-            userText = effective;
-            store.replaceUserMessageAndTruncateAfter(request.sessionId(), restartId, userText);
-        }
-        else {
-            userText = rawContent.strip();
-            if (userText.isEmpty()) {
+            displayText = effective;
+            if (displayText == null || displayText.isBlank()) {
+                displayText = userMessageComposer.fallbackDisplayFromContext(ctxJson);
+            }
+            if (displayText == null || displayText.isBlank()) {
                 try {
                     emitter.send(SseEmitter.event()
                             .data(objectMapper.writeValueAsString(SseEventDto.error("内容不能为空"))));
@@ -146,7 +152,29 @@ public class ChatStreamController {
                 emitter.complete();
                 return emitter;
             }
-            store.appendUserMessage(request.sessionId(), userText);
+            String modelMerged = userMessageComposer.mergeForModel(displayText, ctxJson);
+            String meta = userMessageComposer.buildUserMessageMetadata(ctxJson, modelMerged);
+            store.replaceUserMessageAndTruncateAfter(request.sessionId(), restartId, displayText.strip(), meta);
+        }
+        else {
+            displayText = rawContent.strip();
+            if (displayText.isEmpty()) {
+                displayText = userMessageComposer.fallbackDisplayFromContext(ctxJson);
+            }
+            if (displayText.isBlank()) {
+                try {
+                    emitter.send(SseEmitter.event()
+                            .data(objectMapper.writeValueAsString(SseEventDto.error("内容不能为空"))));
+                }
+                catch (IOException ignored) {
+                    // ignore
+                }
+                emitter.complete();
+                return emitter;
+            }
+            String modelMerged = userMessageComposer.mergeForModel(displayText, ctxJson);
+            String meta = userMessageComposer.buildUserMessageMetadata(ctxJson, modelMerged);
+            store.appendUserMessage(request.sessionId(), displayText, meta);
         }
         var assistantPlaceholder = store.appendAssistantPlaceholder(request.sessionId());
 
@@ -177,7 +205,9 @@ public class ChatStreamController {
             return emitter;
         }
 
-        Disposable sub = (appendMode ? aiStreamService.streamReplyAppend(historyBefore, userText) : aiStreamService.streamReply(historyBefore, userText))
+        Disposable sub = (appendMode
+                ? aiStreamService.streamReplyAppend(historyBefore, displayText, ctxJson)
+                : aiStreamService.streamReply(historyBefore, displayText, ctxJson))
                 .subscribe(chunk -> {
                     if (chunk == null || chunk.isEmpty()) {
                         return;
@@ -201,7 +231,7 @@ public class ChatStreamController {
                     emitter.completeWithError(err);
                 }, () -> {
                     store.updateAssistantContent(request.sessionId(), assistantPlaceholder.id(), full.toString());
-                    maybeUpdateTitleFromConversation(session, userText, full.toString());
+                    maybeUpdateTitleFromConversation(session, displayText, full.toString());
                     try {
                         emitter.send(SseEmitter.event()
                                 .data(objectMapper.writeValueAsString(SseEventDto.done())));

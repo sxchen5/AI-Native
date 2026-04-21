@@ -98,7 +98,7 @@ public class InMemoryChatStore {
     /**
      * 将指定用户消息替换为新文本，并删除其后的所有消息（编辑后重发）。
      */
-    public void replaceUserMessageAndTruncateAfter(String sessionId, String userMessageId, String newContent) {
+    public void replaceUserMessageAndTruncateAfter(String sessionId, String userMessageId, String displayContent, String metadata) {
         ChatSession session = sessions.get(sessionId);
         if (session == null) {
             throw new IllegalArgumentException("会话不存在");
@@ -111,11 +111,11 @@ public class InMemoryChatStore {
         if (old.role() != ChatRole.USER) {
             throw new IllegalArgumentException("只能替换用户消息");
         }
-        if (newContent == null || newContent.isBlank()) {
+        if (displayContent == null || displayContent.isBlank()) {
             throw new IllegalArgumentException("内容不能为空");
         }
         session.replaceMessage(userMessageId,
-                new StoredMessage(old.id(), ChatRole.USER, newContent.strip(), old.createdAt(), old.metadata()));
+                new StoredMessage(old.id(), ChatRole.USER, displayContent.strip(), old.createdAt(), metadata));
         session.removeMessagesAfter(userMessageId);
     }
 

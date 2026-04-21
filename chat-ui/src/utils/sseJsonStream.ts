@@ -25,6 +25,10 @@ function parseSseBlock(block: string): string | null {
   return dataParts.join('\n')
 }
 
+/**
+ * 处理不完整的 SSE 行：只要出现完整的 `data: {...}\\n`，立即解析并回调（不等双换行）。
+ * 网关/代理可能逐行缓冲，避免首 token 延迟到整段结束才显示。
+ */
 async function readSseBody(
   res: Response,
   onEvent: (evt: SseEnvelope) => void,
@@ -42,6 +46,19 @@ async function readSseBody(
     onEvent(evt)
   }
 
+  const tryFlushLines = () => {
+    buffer = buffer.replace(/\r\n/g, '\n')
+    let idx: number
+    while ((idx = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, idx).trimEnd()
+      buffer = buffer.slice(idx + 1)
+      if (!line || line.startsWith(':')) continue
+      if (line.startsWith('data:')) {
+        flushEventBlock(line)
+      }
+    }
+  }
+
   while (true) {
     if (signal?.aborted) {
       reader.cancel().catch(() => {})
@@ -50,14 +67,9 @@ async function readSseBody(
     const { done, value } = await reader.read()
     if (done) break
     buffer += decoder.decode(value, { stream: true })
-    buffer = buffer.replace(/\r\n/g, '\n')
-    let idx: number
-    while ((idx = buffer.indexOf('\n\n')) >= 0) {
-      const rawEvent = buffer.slice(0, idx)
-      buffer = buffer.slice(idx + 2)
-      flushEventBlock(rawEvent)
-    }
+    tryFlushLines()
   }
+  tryFlushLines()
   const tail = buffer.trim()
   if (tail.length > 0) flushEventBlock(tail)
 }
@@ -93,7 +105,7 @@ export async function postSseJsonStream(
       if (!res.ok) {
         const text = await res.text().catch(() => '')
         const err = new Error(text || `HTTP ${res.status}`)
-        ;(err as any).status = res.status
+        ;(err as { status?: number }).status = res.status
         throw err
       }
 
@@ -102,7 +114,7 @@ export async function postSseJsonStream(
     } catch (e) {
       if (signal?.aborted) throw e
       const isLast = attempt >= maxRetries
-      const status = (e as any)?.status
+      const status = (e as { status?: number })?.status
       const retryable = status == null || status >= 500 || status === 429
       if (!retryable || isLast) throw e
       attempt += 1

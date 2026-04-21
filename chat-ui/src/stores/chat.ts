@@ -108,6 +108,7 @@ export const useChatStore = defineStore('chat', () => {
     opts: {
       restartFromUserMessageId?: string | null
       appendAfterUserMessageId?: string | null
+      modelContextJson?: string | null
       onStart: (assistantMessageId: string) => void
       onDelta: (chunk: string) => void
       onDone: () => void
@@ -123,6 +124,9 @@ export const useChatStore = defineStore('chat', () => {
     }
     if (opts.appendAfterUserMessageId) {
       body.appendAfterUserMessageId = opts.appendAfterUserMessageId
+    }
+    if (opts.modelContextJson) {
+      body.modelContextJson = opts.modelContextJson
     }
 
     try {
