@@ -53,8 +53,9 @@ const uploadBusy = ref(false)
 const followUpQuestions = ref<string[]>([])
 const docConvertBusyId = ref<string | null>(null)
 const pendingAttachments = ref<AttachmentChip[]>([])
-const pendingVoiceTranscript = ref('')
 const voiceRecording = ref(false)
+/** 开始本次语音时输入框已有内容，识别结果追加在其后并随 interim 整体替换 */
+let voiceDraftBase = ''
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let speechRec: any = null
 const imageInputRef = ref<HTMLInputElement | null>(null)
@@ -207,13 +208,7 @@ function buildModelContextJson(): string | null {
     label: a.label,
     kind: a.kind,
   }))
-  if (pendingVoiceTranscript.value.trim()) {
-    chips.push({ label: t('chat.voiceChip'), kind: 'voice' })
-  }
   const payload: Record<string, unknown> = {}
-  if (pendingVoiceTranscript.value.trim()) {
-    payload.voiceTranscript = pendingVoiceTranscript.value.trim()
-  }
   if (atts.length) payload.attachments = atts
   if (chips.length) payload.userBubble = { chips }
   if (Object.keys(payload).length === 0) return null
@@ -236,7 +231,6 @@ function removePendingAttachment(i: number) {
 
 function clearPendingContext() {
   pendingAttachments.value = []
-  pendingVoiceTranscript.value = ''
 }
 
 function toggleVoice() {
@@ -251,23 +245,26 @@ function toggleVoice() {
     speechRec?.stop()
     return
   }
+  voiceDraftBase = chat.inputDraft
   speechRec = new SR()
   speechRec.lang = navigator.language.startsWith('zh') ? 'zh-CN' : 'en-US'
   speechRec.continuous = false
   speechRec.interimResults = true
-  speechRec.onresult = (ev: { resultIndex: number; results: { length: number; [i: number]: { 0: { transcript: string } } } }) => {
-    let piece = ''
-    for (let i = ev.resultIndex; i < ev.results.length; i++) {
-      piece += ev.results[i]![0]!.transcript
+  speechRec.onresult = (ev: { results: { length: number; [i: number]: { 0: { transcript: string } } } }) => {
+    let full = ''
+    for (let i = 0; i < ev.results.length; i++) {
+      full += ev.results[i]![0]!.transcript
     }
-    pendingVoiceTranscript.value = (pendingVoiceTranscript.value + piece).trimStart()
+    chat.inputDraft = voiceDraftBase + full
   }
   speechRec.onerror = () => {
     voiceRecording.value = false
+    voiceDraftBase = ''
   }
   speechRec.onend = () => {
     voiceRecording.value = false
     speechRec = null
+    voiceDraftBase = ''
   }
   voiceRecording.value = true
   speechRec.start()
@@ -410,7 +407,7 @@ function runStream(
 async function onSend() {
   const sid = chat.activeSessionId
   const text = chat.inputDraft.trim()
-  const hasCtx = pendingAttachments.value.length > 0 || pendingVoiceTranscript.value.trim().length > 0
+  const hasCtx = pendingAttachments.value.length > 0
   if (!sid || chat.sending) return
   if (!text && !hasCtx) return
 
@@ -923,16 +920,10 @@ function askFollowUp(q: string) {
           accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
           @change="onImageSelected"
         />
-        <div v-if="pendingAttachments.length || pendingVoiceTranscript" class="pending-chips">
+        <div v-if="pendingAttachments.length" class="pending-chips">
           <span v-for="(a, pi) in pendingAttachments" :key="pi" class="pending-chip">
             {{ a.label }}
             <button type="button" class="pending-chip-x" :aria-label="t('chat.removeAttachment')" @click="removePendingAttachment(pi)">
-              ×
-            </button>
-          </span>
-          <span v-if="pendingVoiceTranscript" class="pending-chip pending-chip--voice">
-            {{ t('chat.voiceChip') }}
-            <button type="button" class="pending-chip-x" :aria-label="t('chat.clearVoice')" @click="pendingVoiceTranscript = ''">
               ×
             </button>
           </span>
@@ -944,7 +935,7 @@ function askFollowUp(q: string) {
           resize="none"
           class="composer-input"
           :placeholder="t('chat.inputPlaceholder')"
-          :disabled="!chat.activeSessionId || uploadBusy"
+          :disabled="!chat.activeSessionId || uploadBusy || voiceRecording"
           @keydown="onKeydown"
         />
         <el-tooltip hide-after="0" :content="t('chat.uploadImage')" placement="top">
@@ -986,11 +977,9 @@ function askFollowUp(q: string) {
             circle
             :disabled="
               !chat.activeSessionId ||
-              (!chat.sending &&
-                !chat.inputDraft.trim() &&
-                pendingAttachments.length === 0 &&
-                !pendingVoiceTranscript.trim()) ||
-              uploadBusy
+              (!chat.sending && !chat.inputDraft.trim() && pendingAttachments.length === 0) ||
+              uploadBusy ||
+              voiceRecording
             "
             @click="chat.sending ? chat.stopStream() : onSend()"
           >
