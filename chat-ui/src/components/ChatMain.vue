@@ -395,7 +395,7 @@ function runStream(
       async onDone() {
         stopTypewriter()
         flushStreamVisual()
-        await chat.fetchMessages(sid)
+        await chat.fetchMessages(sid, { silent: true })
         await chat.fetchSessions()
         syncUserEditsFromMessages()
         await scrollToBottom(true)
@@ -410,7 +410,7 @@ function runStream(
       } else {
         ElMessage.error((e as Error).message || t('errors.send'))
       }
-      return chat.fetchMessages(sid)
+      return chat.fetchMessages(sid, { silent: true })
     })
 }
 
@@ -520,7 +520,7 @@ async function onConvertToDocument(msg: ChatMessage) {
   docConvertBusyId.value = msg.id
   try {
     await chatApi.convertToDocument(sid, msg.id)
-    await chat.fetchMessages(sid)
+    await chat.fetchMessages(sid, { silent: true })
     await chat.fetchSessions()
     ElMessage.success(t('chat.docConverted'))
   } catch (e) {
@@ -1480,6 +1480,7 @@ function askFollowUp(q: string) {
 }
 .ai-content {
   width: 100%;
+  min-width: 0;
   padding: 4px 0 0;
   line-height: 1.6;
   font-size: 14px;

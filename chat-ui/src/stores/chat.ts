@@ -71,14 +71,19 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function fetchMessages(sessionId: string) {
-    loadingMessages.value = true
+  async function fetchMessages(sessionId: string, opts?: { silent?: boolean }) {
+    const silent = opts?.silent === true
+    if (!silent) {
+      loadingMessages.value = true
+    }
     try {
       messages.value = await chatApi.listMessages(sessionId)
     } catch (e: unknown) {
       throw new Error((e as Error)?.message || t('errors.loadMessages'))
     } finally {
-      loadingMessages.value = false
+      if (!silent) {
+        loadingMessages.value = false
+      }
     }
   }
 

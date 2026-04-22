@@ -33,7 +33,7 @@ public class ChatSuggestionsController {
 
     private static final Logger log = LoggerFactory.getLogger(ChatSuggestionsController.class);
 
-    private static final int MAX_CHARS = 15;
+    private static final int MAX_CHARS = 25;
 
     private final InMemoryChatStore store;
     private final ChatAiStreamService aiStreamService;
@@ -81,7 +81,8 @@ public class ChatSuggestionsController {
                     String system = """
                             你是追问建议助手。上面「用户最近提问」与「助手最近回复」是用户当前话题的全部依据。
                             请基于这两段内容，生成恰好3条用户很可能接着问的问题；每条必须与上文主题直接相关，禁止泛泛的「你好」「谢谢」「介绍一下」等无关句。
-                            输出格式：严格3行，每行一条完整问句；不要编号、不要引号、不要任何前后说明；每条不超过15个汉字（或等宽英文词）；句末不要用省略号。
+                            每条问句要自然、通顺、像真人追问，不要用生硬的关键词堆砌。
+                            输出格式：严格3行，每行一条完整问句；不要编号、不要引号、不要任何前后说明；每条不超过25个汉字（或语义等长的英文整句）；句末不要用省略号。
                             """;
                     String raw = aiStreamService.generateShortText(system, ctx.toString()).block(Duration.ofSeconds(45));
                     List<String> qs = parseThreeLines(raw == null ? "" : raw);
