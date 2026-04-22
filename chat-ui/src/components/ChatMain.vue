@@ -7,7 +7,6 @@ import {
   Download,
   Edit,
   EditPen,
-  Loading,
   Microphone,
   Paperclip,
   Picture,
@@ -324,13 +323,14 @@ function runStream(
   let streamRaf = 0
   let streamTargetMessageId = ''
 
-  const flushStreamVisual = () => {
+  const flushStreamVisual = async () => {
     if (!assistantId) return
     if (streamShown < streamBuffer.length) {
       streamShown = streamBuffer.length
       chat.messages = chat.messages.map((m) =>
         m.id === assistantId ? { ...m, content: streamBuffer } : m,
       )
+      await nextTick()
     }
   }
 
@@ -394,7 +394,7 @@ function runStream(
       },
       async onDone() {
         stopTypewriter()
-        flushStreamVisual()
+        await flushStreamVisual()
         await chat.fetchMessages(sid, { silent: true })
         await chat.fetchSessions()
         syncUserEditsFromMessages()
@@ -404,7 +404,7 @@ function runStream(
     })
     .catch((e: unknown) => {
       stopTypewriter()
-      flushStreamVisual()
+      void flushStreamVisual()
       if ((e as Error).name === 'AbortError') {
         ElMessage.info(t('errors.stopped'))
       } else {
@@ -672,6 +672,7 @@ function askFollowUp(q: string) {
     <div
       ref="msgScrollEl"
       class="msg-scroll u-scroll"
+      :class="{ 'msg-scroll--jump': showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding }"
       @scroll.passive="onMsgScroll"
     >
       <div v-if="!chat.activeSessionId" class="landing">
@@ -796,8 +797,7 @@ function askFollowUp(q: string) {
             </div>
 
             <div v-else class="ai-content">
-              <div v-if="isAssistantStreaming(m)" class="typing">
-                <el-icon class="spin"><Loading /></el-icon>
+              <div v-if="isAssistantStreaming(m)" class="typing" aria-hidden="true">
                 <span class="dot" /><span class="dot" /><span class="dot" />
               </div>
               <div v-else class="prose-ai markdown-body" v-html="md(m.content)" />
@@ -906,17 +906,17 @@ function askFollowUp(q: string) {
         </div>
         <div ref="bottomAnchor" class="anchor" />
       </div>
-    </div>
 
-    <div
-      v-if="showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding"
-      class="jump-bar"
-    >
-      <el-tooltip hide-after="0" :content="t('chat.jumpToBottom')" placement="top">
-        <el-button class="jump-btn" circle @click="jumpToLatest">
-          <el-icon :size="18"><ArrowDown /></el-icon>
-        </el-button>
-      </el-tooltip>
+      <div
+        v-if="showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding"
+        class="jump-float"
+      >
+        <el-tooltip hide-after="0" :content="t('chat.jumpToBottom')" placement="top">
+          <el-button class="jump-btn" circle @click="jumpToLatest">
+            <el-icon :size="18"><ArrowDown /></el-icon>
+          </el-button>
+        </el-tooltip>
+      </div>
     </div>
 
     <footer class="composer">
@@ -1134,7 +1134,7 @@ function askFollowUp(q: string) {
 }
 
 .thread-head-inner {
-  max-width: min(1040px, 100%);
+  max-width: min(940px, calc(100% - 100px));
   margin: 0 auto;
   text-align: center;
 }
@@ -1175,15 +1175,26 @@ function askFollowUp(q: string) {
   scroll-behavior: smooth;
   padding: 20px 16px 12px;
   background: var(--bg-chat-surface);
+  position: relative;
+}
+.msg-scroll--jump {
+  padding-bottom: 52px;
 }
 
-.jump-bar {
-  flex-shrink: 0;
+/* 悬浮在消息区底部，不占用 flex 条、无整块背景挡内容 */
+.jump-float {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 10px;
   display: flex;
   justify-content: center;
-  align-items: center;
-  padding: 6px 0 8px;
-  background: var(--bg-chat-surface);
+  pointer-events: none;
+  z-index: 4;
+  background: transparent;
+}
+.jump-float :deep(.el-tooltip__trigger) {
+  pointer-events: auto;
 }
 
 .follow-up-inline {
@@ -1380,7 +1391,7 @@ function askFollowUp(q: string) {
 }
 
 .msg-inner {
-  max-width: min(1040px, 100%);
+  max-width: min(940px, calc(100% - 100px));
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -1526,14 +1537,6 @@ function askFollowUp(q: string) {
   gap: 8px;
   min-height: 22px;
 }
-.spin {
-  animation: spin 0.9s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 .typing .dot {
   width: 6px;
   height: 6px;
@@ -1541,14 +1544,14 @@ function askFollowUp(q: string) {
   background: var(--text-muted);
   animation: bounce 1.1s infinite ease-in-out;
 }
+.typing .dot:nth-child(1) {
+  animation-delay: 0s;
+}
 .typing .dot:nth-child(2) {
   animation-delay: 0.12s;
 }
 .typing .dot:nth-child(3) {
   animation-delay: 0.24s;
-}
-.typing .dot:nth-child(4) {
-  animation-delay: 0.36s;
 }
 @keyframes bounce {
   0%,
@@ -1574,7 +1577,7 @@ function askFollowUp(q: string) {
 
 .composer-inner {
   position: relative;
-  max-width: min(1040px, 100%);
+  max-width: min(940px, calc(100% - 100px));
   margin: 0 auto;
 }
 

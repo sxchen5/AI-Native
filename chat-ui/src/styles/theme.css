@@ -189,3 +189,31 @@ html.theme-switching *::after {
 .prose-ai.markdown-body pre code.hljs {
   background: transparent !important;
 }
+
+/* 深色主题：气泡内 Markdown 表格/代码底跟随应用令牌（github-markdown 默认浅色表） */
+html.dark .prose-ai.markdown-body {
+  --fgColor-default: var(--text-primary);
+  --fgColor-muted: var(--text-muted);
+  --fgColor-accent: var(--accent);
+  --bgColor-default: var(--bg-chat-surface);
+  --bgColor-muted: var(--bg-input-fill);
+  --bgColor-neutral-muted: rgba(148, 163, 184, 0.12);
+  --borderColor-default: var(--border-subtle);
+  --borderColor-muted: rgba(148, 163, 184, 0.2);
+}
+
+html.dark .prose-ai.markdown-body table th {
+  background-color: var(--bg-input-fill) !important;
+  color: var(--text-primary);
+  border-color: var(--border-subtle) !important;
+}
+
+html.dark .prose-ai.markdown-body table td {
+  background-color: var(--bg-chat-surface) !important;
+  color: var(--text-primary);
+  border-color: var(--border-subtle) !important;
+}
+
+html.dark .prose-ai.markdown-body table tr:nth-child(2n) td {
+  background-color: var(--bg-input-fill) !important;
+}
