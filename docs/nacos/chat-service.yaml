@@ -11,3 +11,11 @@ spring:
       chat:
         options:
           model: ${OPENAI_MODEL:gpt-4o-mini}
+
+# 智谱（zai-sdk）：按需启用
+app:
+  zhipu:
+    enabled: ${ZHIPU_ENABLED:false}
+    api-key: ${ZHIPU_API_KEY:}
+    model: ${ZHIPU_MODEL:glm-4-flash}
+    base-url: ${ZHIPU_BASE_URL:https://open.bigmodel.cn/api/paas/v4/}

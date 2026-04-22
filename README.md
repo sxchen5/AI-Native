@@ -67,7 +67,7 @@ docker compose up -d
 在 `chat-service` 中已引入 **`ai.z.openapi:zai-sdk:0.3.3`**。开启后，**主对话流式**与**标题/猜你想问等短文本**均走智谱 OpenAPI v4，不再使用 `spring.ai.openai-sdk` 路径。
 
 - **`ZHIPU_ENABLED=true`**（或 Nacos 中 `app.zhipu.enabled: true`）：启用智谱
-- **`ZHIPU_API_KEY`**：智谱开放平台 API Key（未设置时会尝试使用 **`OPENAI_API_KEY`** 作为回退，便于本地一条环境变量调试）
+- **`app.zhipu.api-key`**：智谱开放平台 API Key（`application.yml` 中已用 `api-key: ${ZHIPU_API_KEY:}`，可直接在配置文件写明文，或用环境变量 / Nacos 注入；仍缺省时会尝试 **`OPENAI_API_KEY`**）
 - **`ZHIPU_MODEL`**：默认 `glm-4-flash`（与 `app.zhipu.model` 一致，可用智谱文档中的其它模型名）
 - **`ZHIPU_BASE_URL`**：默认 `https://open.bigmodel.cn/api/paas/v4/`
 
@@ -77,6 +77,7 @@ docker compose up -d
 app:
   zhipu:
     enabled: ${ZHIPU_ENABLED:false}
+    api-key: ${ZHIPU_API_KEY:}
     model: ${ZHIPU_MODEL:glm-4-flash}
     base-url: ${ZHIPU_BASE_URL:https://open.bigmodel.cn/api/paas/v4/}
 ```

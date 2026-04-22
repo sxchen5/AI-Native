@@ -20,12 +20,16 @@ public class ZhipuAiClientConfiguration {
     @Bean(destroyMethod = "close")
     @ConditionalOnProperty(prefix = "app.zhipu", name = "enabled", havingValue = "true")
     public ZhipuAiClient zhipuAiClient(ZhipuAiProperties props) {
-        String key = System.getenv("ZHIPU_API_KEY");
+        String key = props.getApiKey();
+        if (!StringUtils.hasText(key)) {
+            key = System.getenv("ZHIPU_API_KEY");
+        }
         if (!StringUtils.hasText(key)) {
             key = System.getenv("OPENAI_API_KEY");
         }
         if (!StringUtils.hasText(key)) {
-            throw new IllegalStateException("app.zhipu.enabled=true 但未设置 ZHIPU_API_KEY（或回退 OPENAI_API_KEY）");
+            throw new IllegalStateException(
+                    "app.zhipu.enabled=true 但未配置 app.zhipu.api-key（或环境变量 ZHIPU_API_KEY / OPENAI_API_KEY）");
         }
         String base = StringUtils.hasText(props.getBaseUrl()) ? props.getBaseUrl().trim() : "https://open.bigmodel.cn/api/paas/v4/";
         if (!base.endsWith("/")) {

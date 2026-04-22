@@ -49,10 +49,11 @@ logging:
     org.springframework.ai: INFO
     com.example.doubaoai: INFO
 
-# 智谱 AI（官方 zai-sdk）：设置 app.zhipu.enabled=true，并配置环境变量 ZHIPU_API_KEY（未设置时可回退 OPENAI_API_KEY）
+# 智谱 AI（官方 zai-sdk）：app.zhipu.enabled=true 时生效；api-key 可写在本文件或通过 ZHIPU_API_KEY 注入
 app:
   zhipu:
     enabled: ${ZHIPU_ENABLED:false}
+    api-key: ${ZHIPU_API_KEY:}
     model: ${ZHIPU_MODEL:glm-4-flash}
     base-url: ${ZHIPU_BASE_URL:https://open.bigmodel.cn/api/paas/v4/}
   auth:
