@@ -793,7 +793,7 @@ function askFollowUp(q: string) {
                 <el-icon class="spin"><Loading /></el-icon>
                 <span class="dot" /><span class="dot" /><span class="dot" />
               </div>
-              <div v-else class="prose-ai" v-html="md(m.content)" />
+              <div v-else class="prose-ai markdown-body" v-html="md(m.content)" />
             </div>
 
             <div v-if="m.role === 'ASSISTANT' && docMeta(m)" class="ai-toolbar-slot">

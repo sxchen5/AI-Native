@@ -306,7 +306,7 @@ watch(
               {{ t('canvas.preview') }}
             </div>
             <div ref="previewRef" class="preview-scroll u-scroll">
-              <div class="prose-ai canvas-doc" v-html="md(canvasDraft)" />
+              <div class="prose-ai markdown-body canvas-doc" v-html="md(canvasDraft)" />
             </div>
           </div>
         </div>

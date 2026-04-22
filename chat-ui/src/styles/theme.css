@@ -150,39 +150,31 @@ body {
   animation: msg-in 0.38s var(--ease-out) both;
 }
 
-/* Markdown 代码块 */
-.prose-ai pre {
-  margin: 0.5rem 0;
-  padding: 12px 14px;
-  border-radius: var(--radius-sm);
-  background: var(--code-bg);
-  border: 1px solid var(--border-subtle);
+/* AI 气泡 Markdown：github-markdown-css（.markdown-body）+ 与聊天区融合 */
+.prose-ai.markdown-body {
+  font-size: 14px;
+  line-height: 1.6;
+  background-color: transparent !important;
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.prose-ai.markdown-body a {
+  color: var(--accent);
+}
+
+.prose-ai.markdown-body table {
+  display: block;
+  max-width: 100%;
   overflow-x: auto;
-  font-size: 13px;
-  line-height: 1.55;
+  -webkit-overflow-scrolling: touch;
 }
 
-.prose-ai pre code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+/* 代码块：保留 highlight.js 配色，仅补边框与滚动 */
+.prose-ai.markdown-body pre {
+  border: 1px solid var(--border-subtle);
+}
+
+.prose-ai.markdown-body pre code.hljs {
   background: transparent !important;
-  padding: 0 !important;
-}
-
-.prose-ai code:not(pre code) {
-  padding: 2px 6px;
-  border-radius: 6px;
-  background: var(--code-bg);
-  font-size: 0.9em;
-}
-
-.prose-ai p {
-  margin: 0.35rem 0;
-}
-
-.prose-ai p:first-child {
-  margin-top: 0;
-}
-
-.prose-ai p:last-child {
-  margin-bottom: 0;
 }
