@@ -1134,7 +1134,7 @@ function askFollowUp(q: string) {
 }
 
 .thread-head-inner {
-  max-width: 880px;
+  max-width: min(1040px, 100%);
   margin: 0 auto;
   text-align: center;
 }
@@ -1380,7 +1380,7 @@ function askFollowUp(q: string) {
 }
 
 .msg-inner {
-  max-width: 880px;
+  max-width: min(1040px, 100%);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -1399,6 +1399,12 @@ function askFollowUp(q: string) {
 
 .bubble-wrap {
   max-width: min(720px, 92%);
+}
+
+/* 助手消息占满消息列宽度，避免长文/Markdown 只占半栏 */
+.row.start .bubble-wrap {
+  max-width: 100%;
+  width: 100%;
 }
 
 .user-block {
@@ -1567,7 +1573,7 @@ function askFollowUp(q: string) {
 
 .composer-inner {
   position: relative;
-  max-width: 880px;
+  max-width: min(1040px, 100%);
   margin: 0 auto;
 }
 

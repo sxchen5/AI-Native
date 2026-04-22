@@ -21,10 +21,13 @@ onMounted(async () => {
   try {
     await chat.fetchSessions()
     if (!props.compact) {
-      // 全屏聊天：登录后不自动新建会话
-      chat.setActiveSession(null)
+      // 全屏：从画布返回等场景若已有活动会话则保留并刷新，勿清空
+      if (chat.activeSessionId) {
+        await chat.fetchMessages(chat.activeSessionId)
+      } else {
+        chat.setActiveSession(null)
+      }
     } else if (chat.activeSessionId) {
-      // 画布内嵌：保留当前会话并拉取消息，避免左侧列表为空
       await chat.fetchMessages(chat.activeSessionId)
     }
   } catch (e: unknown) {
