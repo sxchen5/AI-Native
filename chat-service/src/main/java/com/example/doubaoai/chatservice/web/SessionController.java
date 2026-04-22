@@ -73,7 +73,9 @@ public class SessionController {
     }
 
     @PatchMapping("/{sessionId}")
-    public ResponseEntity<Void> rename(@PathVariable String sessionId, @Valid @RequestBody RenameSessionRequest request) {
+    public ResponseEntity<Void> rename(
+            @PathVariable("sessionId") String sessionId,
+            @Valid @RequestBody RenameSessionRequest request) {
         try {
             store.rename(sessionId, request.title());
             log.info("session renamed id={}", sessionId);
@@ -85,14 +87,14 @@ public class SessionController {
     }
 
     @DeleteMapping("/{sessionId}")
-    public ResponseEntity<Void> delete(@PathVariable String sessionId) {
+    public ResponseEntity<Void> delete(@PathVariable("sessionId") String sessionId) {
         store.delete(sessionId);
         log.info("session deleted id={}", sessionId);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{sessionId}/messages")
-    public ResponseEntity<List<MessageDto>> messages(@PathVariable String sessionId) {
+    public ResponseEntity<List<MessageDto>> messages(@PathVariable("sessionId") String sessionId) {
         log.debug("messages fetch sessionId={}", sessionId);
         return store.find(sessionId)
                 .map(s -> s.messagesView().stream()

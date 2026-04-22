@@ -191,15 +191,17 @@ export const useChatStore = defineStore('chat', () => {
           retryDelayMs: 800,
         },
       )
-      // SSE 流结束后即可再次发送；摘要/猜你想问等在 onDone 内异步完成，不阻塞 sending
-      sending.value = false
-      abort = null
-      await opts.onDone()
     } catch (e) {
       sending.value = false
       abort = null
       throw e
     }
+    // 流一结束即可再发；标题/猜你想问等在 onDone 里异步完成，不占用 sending
+    sending.value = false
+    abort = null
+    void Promise.resolve(opts.onDone()).catch(() => {
+      /* onDone 内拉取失败等不阻塞发送 */
+    })
   }
 
   return {

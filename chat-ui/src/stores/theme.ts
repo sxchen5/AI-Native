@@ -12,12 +12,18 @@ export const useThemeStore = defineStore('theme', () => {
 
   function applyDom() {
     const root = document.documentElement
+    root.classList.add('theme-switching')
     if (mode.value === 'dark') {
       root.classList.add('dark')
     } else {
       root.classList.remove('dark')
     }
     root.dataset.theme = mode.value
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        root.classList.remove('theme-switching')
+      })
+    })
   }
 
   function setMode(next: ThemeMode) {

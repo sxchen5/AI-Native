@@ -49,10 +49,12 @@ const elementLocale = computed(() => (localeStore.locale === 'en-US' ? en : zhCn
 <style scoped>
 .root {
   height: 100%;
+  min-height: 100%;
+  background: var(--bg-app);
 }
 
 .boot {
   height: 100%;
-  background: var(--bg-elevated);
+  background: var(--bg-app);
 }
 </style>

@@ -84,6 +84,17 @@ body {
 
 #app {
   height: 100%;
+  min-height: 100%;
+  background: var(--bg-app);
+}
+
+/* 主题切换瞬间禁用过渡，避免大面积「闪白」 */
+html.theme-switching,
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
+  animation: none !important;
 }
 
 /* 细滚动条：加在可滚动容器上（.u-scroll），悬停或滚动时显示拇指，静止淡出 */
