@@ -414,7 +414,8 @@ function runStream(
     })
 }
 
-async function onSend() {
+/** 发送一轮用户消息（无会话时先建会话）；`displayText` 为气泡展示与发给模型的用户文案 */
+async function sendUserTurn(displayText: string) {
   let sid = chat.activeSessionId
   if (!sid) {
     try {
@@ -425,7 +426,7 @@ async function onSend() {
       return
     }
   }
-  const text = chat.inputDraft.trim()
+  const text = displayText.trim()
   const hasCtx = pendingAttachments.value.length > 0
   if (chat.sending) return
   if (!text && !hasCtx) return
@@ -448,6 +449,10 @@ async function onSend() {
   await scrollToBottom(false)
 
   await runStream(text, undefined, undefined, ctxJson)
+}
+
+async function onSend() {
+  await sendUserTurn(chat.inputDraft)
 }
 
 function startUserEdit(m: ChatMessage) {
@@ -556,8 +561,10 @@ const showLanding = computed(
     !props.hideThreadHead,
 )
 
-function fillSuggestion(text: string) {
-  chat.inputDraft = text
+/** 落地页推荐问题：点击即用该文案发起一轮对话（等同发送） */
+async function sendFromSuggestionChip(text: string) {
+  if (chat.sending) return
+  await sendUserTurn(text)
 }
 
 function openFilePicker() {
@@ -676,7 +683,7 @@ function askFollowUp(q: string) {
             :key="i"
             type="button"
             class="suggestion-chip"
-            @click="fillSuggestion(chip)"
+            @click="sendFromSuggestionChip(chip)"
           >
             {{ chip }}
           </button>
@@ -692,7 +699,7 @@ function askFollowUp(q: string) {
             :key="i"
             type="button"
             class="suggestion-chip"
-            @click="fillSuggestion(chip)"
+            @click="sendFromSuggestionChip(chip)"
           >
             {{ chip }}
           </button>
