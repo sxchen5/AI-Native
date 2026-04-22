@@ -1,0 +1,83 @@
+# 全栈生产编排：Nacos + chat-service + chat-gateway + 前端 Nginx
+# 用法：cp deploy/env.example .env 后编辑，再执行 deploy/docker-up.sh
+#
+# 直接 compose：
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+
+services:
+  nacos:
+    image: nacos/nacos-server:v2.3.2
+    container_name: nacos-ai-chat
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+    ports:
+      - "${NACOS_PORT:-8848}:8848"
+      - "9848:9848"
+    volumes:
+      - nacos-data:/home/nacos/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8848/nacos/"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 50s
+
+  chat-service:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.chat-service
+    image: ${CHAT_SERVICE_IMAGE:-doubao-ai-chat-service:local}
+    container_name: chat-service
+    depends_on:
+      nacos:
+        condition: service_healthy
+    environment:
+      NACOS_SERVER: nacos:8848
+      LOGBACK_LOG_DIR: /app/logs
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-changeme}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_HTTP_TIMEOUT: ${OPENAI_HTTP_TIMEOUT:-15m}
+      ZHIPU_ENABLED: ${ZHIPU_ENABLED:-false}
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+      ZHIPU_MODEL: ${ZHIPU_MODEL:-glm-4-flash}
+      ZHIPU_BASE_URL: ${ZHIPU_BASE_URL:-https://open.bigmodel.cn/api/paas/v4/}
+    volumes:
+      - chat-service-logs:/app/logs
+    ports:
+      - "${CHAT_SERVICE_PORT:-8081}:8081"
+
+  chat-gateway:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.chat-gateway
+    image: ${CHAT_GATEWAY_IMAGE:-doubao-ai-chat-gateway:local}
+    container_name: chat-gateway
+    depends_on:
+      - chat-service
+    environment:
+      NACOS_SERVER: nacos:8848
+      LOGBACK_LOG_DIR: /app/logs
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+    volumes:
+      - chat-gateway-logs:/app/logs
+    ports:
+      - "${CHAT_GATEWAY_PORT:-8080}:8080"
+
+  chat-ui:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.chat-ui
+    image: ${CHAT_UI_IMAGE:-doubao-ai-chat-ui:local}
+    container_name: chat-ui
+    depends_on:
+      - chat-gateway
+    ports:
+      - "${CHAT_UI_PORT:-80}:80"
+
+volumes:
+  nacos-data:
+  chat-service-logs:
+  chat-gateway-logs:

@@ -1,0 +1,18 @@
+FROM maven:3.9.9-eclipse-temurin-17 AS build
+WORKDIR /src
+COPY pom.xml .
+COPY chat-service/pom.xml chat-service/
+COPY chat-gateway/pom.xml chat-gateway/
+COPY chat-gateway/src chat-gateway/src
+RUN mvn -q -pl chat-gateway -am -DskipTests package
+
+FROM eclipse-temurin:17-jre-jammy
+WORKDIR /app
+RUN groupadd -r app && useradd -r -g app app
+RUN mkdir -p /app/logs && chown app:app /app/logs
+COPY --from=build /src/chat-gateway/target/chat-gateway-*.jar /app/app.jar
+USER app
+EXPOSE 8080
+ENV LOGBACK_LOG_DIR=/app/logs
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0"
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

@@ -18,6 +18,9 @@
 - `chat-service`：聊天核心服务（会话/消息内存存储、Spring AI `ChatClient` 流式输出、SSE）
 - `chat-ui`：Vue3 前端（左侧会话列表 + 右侧聊天窗口）
 - `docker-compose.yml`：一键启动 **Nacos 2.3.x**（镜像 `nacos/nacos-server:v2.3.2`）
+- `docker-compose.prod.yml`：生产编排（Nacos + 网关 + 服务 + 前端 Nginx）
+- `deploy/`：Dockerfile、Nginx 配置、`build.sh` / `docker-up.sh` / `start-local.sh` 等脚本
+- `docs/DEPLOY.md`：**Docker 与非 Docker 部署说明、Logback 日志目录**
 - `docs/nacos/*.yaml`：Nacos 配置示例（复制到控制台即可）
 
 ## 1）启动 Nacos（2.3.x）

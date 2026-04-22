@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="60 seconds">
+    <!-- 日志目录：LOGBACK_LOG_DIR（推荐）或 LOG_DIR；默认 logs（相对工作目录） -->
+    <property name="LOG_PATH" value="${LOGBACK_LOG_DIR:-${LOG_DIR:-logs}}"/>
+
+    <property name="APP_LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${APP_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- 当前写入 main.log；按天滚动为 main.yyyyMMdd.log（与需求 main.log{yyyyMMdd} 对应） -->
+    <appender name="FILE_MAIN" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/main.log</file>
+        <encoder>
+            <pattern>${APP_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/main.%d{yyyyMMdd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+            <cleanHistoryOnStart>false</cleanHistoryOnStart>
+        </rollingPolicy>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE_MAIN"/>
+    </root>
+
+    <logger name="com.example.doubaoai" level="${LOG_LEVEL_APP:-INFO}"/>
+    <logger name="org.springframework" level="WARN"/>
+</configuration>

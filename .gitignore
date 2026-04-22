@@ -5,3 +5,6 @@
 
 chat-ui/node_modules/
 chat-ui/dist/
+
+# 本地 / 脚本默认日志与 pid
+logs/
