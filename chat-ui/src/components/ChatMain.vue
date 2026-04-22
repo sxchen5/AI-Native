@@ -672,7 +672,6 @@ function askFollowUp(q: string) {
     <div
       ref="msgScrollEl"
       class="msg-scroll u-scroll"
-      :class="{ 'msg-scroll--jump': showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding }"
       @scroll.passive="onMsgScroll"
     >
       <div v-if="!chat.activeSessionId" class="landing">
@@ -906,17 +905,17 @@ function askFollowUp(q: string) {
         </div>
         <div ref="bottomAnchor" class="anchor" />
       </div>
+    </div>
 
-      <div
-        v-if="showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding"
-        class="jump-float"
-      >
-        <el-tooltip hide-after="0" :content="t('chat.jumpToBottom')" placement="top">
-          <el-button class="jump-btn" circle @click="jumpToLatest">
-            <el-icon :size="18"><ArrowDown /></el-icon>
-          </el-button>
-        </el-tooltip>
-      </div>
+    <div
+      v-if="showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding"
+      class="jump-strip"
+    >
+      <el-tooltip hide-after="0" :content="t('chat.jumpToBottom')" placement="top">
+        <el-button class="jump-btn" circle @click="jumpToLatest">
+          <el-icon :size="18"><ArrowDown /></el-icon>
+        </el-button>
+      </el-tooltip>
     </div>
 
     <footer class="composer">
@@ -1022,7 +1021,6 @@ function askFollowUp(q: string) {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  position: relative;
 }
 
 .embed-bar {
@@ -1175,26 +1173,16 @@ function askFollowUp(q: string) {
   scroll-behavior: smooth;
   padding: 20px 16px 12px;
   background: var(--bg-chat-surface);
-  position: relative;
-}
-.msg-scroll--jump {
-  padding-bottom: 52px;
 }
 
-/* 悬浮在消息区底部，不占用 flex 条、无整块背景挡内容 */
-.jump-float {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 10px;
+/* 在滚动区与输入框之间占位一行，随布局流动，避免 absolute 在滚动视口内「粘住」 */
+.jump-strip {
+  flex-shrink: 0;
   display: flex;
   justify-content: center;
-  pointer-events: none;
-  z-index: 4;
+  align-items: center;
+  padding: 4px 0 6px;
   background: transparent;
-}
-.jump-float :deep(.el-tooltip__trigger) {
-  pointer-events: auto;
 }
 
 .follow-up-inline {
