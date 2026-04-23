@@ -7,6 +7,7 @@ import {
   Download,
   Edit,
   EditPen,
+  Loading,
   Microphone,
   Paperclip,
   Picture,
@@ -31,7 +32,7 @@ import { parseFeedbackVote } from '../utils/messageFeedback'
 import type { AttachmentChip } from '../utils/modelContext'
 import { parseUserBubbleFromMetadata } from '../utils/modelContext'
 
-const { t, tm } = useI18n()
+const { t } = useI18n()
 const router = useRouter()
 const chat = useChatStore()
 
@@ -60,6 +61,48 @@ let speechRec: any = null
 const imageInputRef = ref<HTMLInputElement | null>(null)
 const composerInputRef = ref<InstanceType<typeof ElInput> | null>(null)
 let composerScrollTimer: ReturnType<typeof setTimeout> | null = null
+
+const showLanding = computed(
+  () =>
+    !!chat.activeSessionId &&
+    !chat.loadingMessages &&
+    !chat.sending &&
+    chat.messages.length === 0 &&
+    !props.hideThreadHead,
+)
+
+const landingSuggestions = ref<string[]>([])
+const loadingLandingSuggestions = ref(false)
+let landingFetchGen = 0
+
+/** 无会话或当前会话尚无消息时展示落地推荐（画布内嵌不请求） */
+const showSuggestionLanding = computed(
+  () => !props.hideThreadHead && (!chat.activeSessionId || showLanding.value),
+)
+
+async function refreshLandingSuggestions() {
+  if (!showSuggestionLanding.value) return
+  const gen = ++landingFetchGen
+  loadingLandingSuggestions.value = true
+  try {
+    const qs = await chatApi.fetchLandingSuggestions()
+    if (gen !== landingFetchGen) return
+    landingSuggestions.value = qs
+  } catch {
+    if (gen !== landingFetchGen) return
+    landingSuggestions.value = []
+  } finally {
+    if (gen === landingFetchGen) loadingLandingSuggestions.value = false
+  }
+}
+
+watch(
+  showSuggestionLanding,
+  (show) => {
+    if (show) void refreshLandingSuggestions()
+  },
+  { immediate: true },
+)
 
 /** 画布内嵌：输入区更矮；全屏略高 */
 const composerAutosize = computed(() =>
@@ -616,19 +659,7 @@ async function loadFollowUps() {
   }
 }
 
-const suggestionChips = computed(() => {
-  const raw = tm('chat.suggestions') as unknown
-  return Array.isArray(raw) ? (raw as string[]) : []
-})
-
-const showLanding = computed(
-  () =>
-    chat.activeSessionId &&
-    !chat.loadingMessages &&
-    !chat.sending &&
-    chat.messages.length === 0 &&
-    !props.hideThreadHead,
-)
+const suggestionChips = computed(() => landingSuggestions.value)
 
 /** 落地页推荐问题：点击即用该文案发起一轮对话（等同发送） */
 async function sendFromSuggestionChip(text: string) {
@@ -689,7 +720,12 @@ async function renameSessionTitle() {
 }
 
 function goFullChat() {
-  void router.push({ name: 'chat' })
+  const sid = chat.activeSessionId
+  if (sid) {
+    void router.push({ name: 'chat', params: { sessionId: sid } })
+  } else {
+    void router.push({ name: 'chat' })
+  }
 }
 
 function docBodyPreview(body: string) {
@@ -746,7 +782,10 @@ function askFollowUp(q: string) {
       <div v-if="!chat.activeSessionId" class="landing">
         <h2 class="land-greeting">{{ t('chat.landGreeting') }}</h2>
         <p class="land-disclaimer">{{ t('chat.landDisclaimer') }}</p>
-        <div class="suggestion-grid">
+        <div v-if="loadingLandingSuggestions" class="landing-suggest-loading" aria-busy="true">
+          <el-icon class="landing-suggest-spin"><Loading /></el-icon>
+        </div>
+        <div v-else class="suggestion-grid">
           <button
             v-for="(chip, i) in suggestionChips"
             :key="i"
@@ -762,7 +801,10 @@ function askFollowUp(q: string) {
       <div v-else-if="showLanding" class="landing">
         <h2 class="land-greeting">{{ t('chat.landGreeting') }}</h2>
         <p class="land-disclaimer">{{ t('chat.landDisclaimer') }}</p>
-        <div class="suggestion-grid">
+        <div v-if="loadingLandingSuggestions" class="landing-suggest-loading" aria-busy="true">
+          <el-icon class="landing-suggest-spin"><Loading /></el-icon>
+        </div>
+        <div v-else class="suggestion-grid">
           <button
             v-for="(chip, i) in suggestionChips"
             :key="i"
@@ -1169,8 +1211,28 @@ function askFollowUp(q: string) {
   max-width: 640px;
 }
 
+.landing-suggest-loading {
+  margin-top: 22px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.landing-suggest-spin {
+  font-size: 28px;
+  color: var(--accent);
+  animation: landing-spin 0.9s linear infinite;
+}
+
+@keyframes landing-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .suggestion-chip {
-  border: 1px solid var(--border-subtle);
+  border: none;
   background: var(--bg-input-fill);
   color: var(--text-primary);
   font: inherit;
@@ -1180,12 +1242,10 @@ function askFollowUp(q: string) {
   cursor: pointer;
   transition:
     background 0.2s ease,
-    border-color 0.2s ease,
     box-shadow 0.2s ease;
 }
 
 .suggestion-chip:hover {
-  border-color: var(--accent-soft);
   box-shadow: 0 4px 16px rgba(59, 108, 255, 0.12);
 }
 

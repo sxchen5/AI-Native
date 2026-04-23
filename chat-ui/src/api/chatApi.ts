@@ -68,6 +68,12 @@ export async function fetchFollowUpQuestions(sessionId: string): Promise<string[
   return data.questions ?? []
 }
 
+/** 新对话落地页：服务端 AI 生成中文推荐问（失败时服务端仍返回备选列表） */
+export async function fetchLandingSuggestions(): Promise<string[]> {
+  const { data } = await http.get<{ questions: string[] }>('/api/chat/landing-suggestions')
+  return data.questions ?? []
+}
+
 export async function extractAttachmentText(file: File): Promise<ExtractedAttachment> {
   const form = new FormData()
   form.append('file', file)

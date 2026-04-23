@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 
 const props = defineProps<{
   /** 画布分屏内嵌：收紧聊天区顶栏，且不清空当前会话（避免左侧对话被置空） */
@@ -14,16 +15,69 @@ import { useChatStore } from '../stores/chat'
 import { useUiStore } from '../stores/ui'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const chat = useChatStore()
 const ui = useUiStore()
+
+function routeSessionId(): string {
+  const p = route.params.sessionId
+  return typeof p === 'string' && p.length > 0 ? p : ''
+}
+
+/** 地址栏与当前会话同步（画布内嵌不改动路由） */
+watch(
+  () => chat.activeSessionId,
+  (id) => {
+    if (props.compact || route.name !== 'chat') return
+    const next = id ?? ''
+    const cur = routeSessionId()
+    if (next === cur) return
+    if (id) {
+      void router.replace({ name: 'chat', params: { sessionId: id } })
+    } else if (!cur) {
+      // 地址栏已是「无会话」时才同步清空；避免刷新 /chat/:id 时 store 尚未赋值就把路由打回 /chat
+      void router.replace({ name: 'chat' })
+    }
+  },
+)
+
+/** 浏览器前进/后退或手动改 URL 时加载对应会话 */
+watch(
+  () => routeSessionId(),
+  async (sid) => {
+    if (props.compact || route.name !== 'chat') return
+    if (sid === (chat.activeSessionId ?? '')) return
+    if (!sid) {
+      chat.setActiveSession(null)
+      return
+    }
+    try {
+      await chat.selectSession(sid)
+    } catch {
+      ElMessage.error(t('errors.loadMessages'))
+      chat.setActiveSession(null)
+      void router.replace({ name: 'chat' })
+    }
+  },
+)
 
 onMounted(async () => {
   try {
     await chat.fetchSessions()
     if (!props.compact) {
-      // 全屏：从画布返回等场景若已有活动会话则保留并刷新，勿清空
-      if (chat.activeSessionId) {
+      const sid = routeSessionId()
+      if (sid) {
+        try {
+          await chat.selectSession(sid)
+        } catch {
+          ElMessage.error(t('errors.loadMessages'))
+          chat.setActiveSession(null)
+          void router.replace({ name: 'chat' })
+        }
+      } else if (chat.activeSessionId) {
         await chat.fetchMessages(chat.activeSessionId)
+        void router.replace({ name: 'chat', params: { sessionId: chat.activeSessionId } })
       } else {
         chat.setActiveSession(null)
       }

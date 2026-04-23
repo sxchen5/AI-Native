@@ -76,14 +76,6 @@
   "chat": {
     "landGreeting": "What can I help you with?",
     "landDisclaimer": "AI-generated content — please verify.",
-    "suggestions": [
-      "What is an AI agent?",
-      "Latest trends in Java backend?",
-      "Spring Boot health check endpoint example",
-      "How do I convert Markdown to PDF?",
-      "SSE vs WebSocket — differences",
-      "Help me draft a weekly report template"
-    ],
     "quickTone": "Change tone",
     "quickLength": "Adjust length",
     "quickPolish": "Polish text",

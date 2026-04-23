@@ -82,14 +82,15 @@ async function applyToMessage() {
     await chat.fetchMessages(sid)
     touchModified()
     ElMessage.success(t('chat.canvasApplied'))
-    void router.push({ name: 'chat' })
+    void router.push({ name: 'chat', params: { sessionId: sid } })
   } catch (e) {
     ElMessage.error((e as Error).message || t('chat.uploadFail'))
   }
 }
 
 function goBack() {
-  void router.push({ name: 'chat' })
+  const sid = chat.activeSessionId
+  void router.push(sid ? { name: 'chat', params: { sessionId: sid } } : { name: 'chat' })
 }
 
 async function copyDoc() {
