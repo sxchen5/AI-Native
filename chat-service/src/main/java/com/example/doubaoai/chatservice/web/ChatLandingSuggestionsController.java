@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,7 +19,7 @@ import com.example.doubaoai.chatservice.util.TextClipUtil;
 import com.example.doubaoai.chatservice.web.dto.LandingSuggestionsResponse;
 
 /**
- * 新对话落地页推荐问题：由模型生成中文短问句；失败时返回固定备选列表。
+ * 新对话落地页推荐问题：由模型生成 9 条中文短问句；每次请求附带随机种子提示，并提高采样温度，减少重复。
  */
 @RestController
 @RequestMapping("/api/chat")
@@ -27,7 +28,9 @@ public class ChatLandingSuggestionsController {
     private static final Logger log = LoggerFactory.getLogger(ChatLandingSuggestionsController.class);
 
     private static final int MAX_CHARS = 36;
-    private static final int WANT = 6;
+    private static final int WANT = 9;
+    /** 落地页专用：较高温度使每次开场问题更易变化 */
+    private static final double LANDING_TEMPERATURE = 0.92;
 
     private static final List<String> FALLBACK = List.of(
             "什么是 AI Agent？",
@@ -35,7 +38,13 @@ public class ChatLandingSuggestionsController {
             "用 Spring Boot 写个健康检查接口",
             "如何把 Markdown 转成 PDF？",
             "解释一下 SSE 和 WebSocket 的区别",
-            "帮我写一段周报总结模版");
+            "帮我写一段周报总结模版",
+            "中小企业做数字化转型从哪里起步？",
+            "跨境电商独立站怎么选支付与物流？",
+            "新手学 Python 做数据分析该练哪些项目？",
+            "合同里的「不可抗力」一般怎么约定？",
+            "高血压患者在饮食上要注意什么？",
+            "幼儿园孩子分离焦虑家长怎么应对？");
 
     private final ChatAiStreamService aiStreamService;
 
@@ -45,22 +54,34 @@ public class ChatLandingSuggestionsController {
 
     @GetMapping("/landing-suggestions")
     public ResponseEntity<LandingSuggestionsResponse> landingSuggestions() {
+        int seed = ThreadLocalRandom.current().nextInt(1_000_000, Integer.MAX_VALUE);
         String system = """
-                你是中文对话产品的「开场问题」策划：请生成恰好6条**用户可能想向 AI 提问**的中文短句。
-                要求：覆盖尽量多元的行业与场景（如科技、制造、金融、医疗、教育、法律、市场、设计、生活、政务等），彼此主题不要雷同。
+                你是中文对话产品的「开场问题」策划：请生成恰好9条**用户可能想向 AI 提问**的中文短句。
+                要求：覆盖尽量多元的行业与场景（如科技、制造、金融、医疗、教育、法律、市场、设计、生活、政务等），彼此主题不要雷同；**不要**与常见固定示例句雷同，尽量新颖、具体。
                 每条要自然、像真实用户会输入的问句；不要编号、不要引号、不要任何前后说明；每条不超过36个汉字；不要用省略号结尾。
-                输出格式：严格6行，每行一条完整问句。
+                输出格式：严格9行，每行一条完整问句。
                 """;
+        String userLine = "请直接输出9行问题。本次创意种子：" + seed + "（仅用于让你换一批角度，不要输出种子数字本身）。";
         String raw = "";
         try {
-            raw = aiStreamService.generateShortText(system, "请直接输出6行问题。").block(Duration.ofSeconds(60));
+            raw = aiStreamService.generateShortText(system, userLine, LANDING_TEMPERATURE).block(Duration.ofSeconds(90));
         } catch (Exception e) {
             log.warn("landing-suggestions AI 失败，使用备选: {}", e.toString());
         }
         List<String> parsed = parseLines(raw == null ? "" : raw, WANT);
-        List<String> merged = mergeUnique(parsed, FALLBACK, WANT);
-        log.debug("landing-suggestions count={}", merged.size());
+        List<String> merged = mergeUnique(parsed, shuffleFallback(seed), WANT);
+        log.debug("landing-suggestions seed={} count={}", seed, merged.size());
         return ResponseEntity.ok(new LandingSuggestionsResponse(merged));
+    }
+
+    /** 备选列表按种子轮转顺序，便于在模型失败时仍有一定变化 */
+    private static List<String> shuffleFallback(int seed) {
+        int n = FALLBACK.size();
+        List<String> out = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            out.add(FALLBACK.get((seed + i) % n));
+        }
+        return out;
     }
 
     private static List<String> parseLines(String raw, int maxLines) {

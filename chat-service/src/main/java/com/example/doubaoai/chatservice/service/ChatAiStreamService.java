@@ -11,6 +11,7 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.DefaultToolCallingChatOptions;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
@@ -74,13 +75,24 @@ public class ChatAiStreamService {
     }
 
     public Mono<String> generateShortText(String systemPrompt, String userPrompt) {
+        return generateShortText(systemPrompt, userPrompt, 0.5);
+    }
+
+    /**
+     * 短文本生成；{@code temperature} 较高时输出更随机（如落地页开场问题）。
+     */
+    public Mono<String> generateShortText(String systemPrompt, String userPrompt, double temperature) {
         if (useZhipu()) {
-            return zhipuShortText(systemPrompt, userPrompt);
+            return zhipuShortText(systemPrompt, userPrompt, (float) temperature);
         }
         Prompt prompt = new Prompt(
                 new SystemMessage(systemPrompt),
                 new UserMessage(userPrompt));
+        var opts = DefaultToolCallingChatOptions.builder()
+                .temperature(temperature)
+                .build();
         return chatClient.prompt(prompt)
+                .options(opts)
                 .stream()
                 .content()
                 .subscribeOn(Schedulers.boundedElastic())
@@ -194,7 +206,7 @@ public class ChatAiStreamService {
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
-    private Mono<String> zhipuShortText(String systemPrompt, String userPrompt) {
+    private Mono<String> zhipuShortText(String systemPrompt, String userPrompt, float temperature) {
         return Mono.fromCallable(() -> {
             ZhipuAiClient client = zhipuAiClient.getIfAvailable();
             if (client == null) {
@@ -207,8 +219,8 @@ public class ChatAiStreamService {
                     .model(zhipuAiProperties.getModel())
                     .messages(messages)
                     .stream(false)
-                    .temperature(0.5f)
-                    .maxTokens(512)
+                    .temperature(temperature)
+                    .maxTokens(1024)
                     .build();
             ChatCompletionResponse resp = client.chat().createChatCompletion(params);
             if (!resp.isSuccess() || resp.getData() == null) {
