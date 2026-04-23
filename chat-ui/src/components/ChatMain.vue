@@ -303,12 +303,7 @@ onBeforeUnmount(() => {
     /* ignore */
   }
   ttsMessageId.value = null
-  try {
-    speechRec?.stop()
-  } catch {
-    /* ignore */
-  }
-  speechRec = null
+  stopVoiceCapture()
 })
 
 async function copyText(text: string) {
@@ -363,16 +358,49 @@ function clearPendingContext() {
   pendingAttachments.value = []
 }
 
+/** 结束浏览器语音识别：立即更新 UI，与消息朗读的「暂停」图标区分开 */
+function stopVoiceCapture() {
+  const r = speechRec
+  speechRec = null
+  voiceRecording.value = false
+  if (!r) return
+  try {
+    // abort 更快结束且不等待最终结果；部分环境仅支持 stop
+    const anyR = r as { abort?: () => void; stop: () => void }
+    if (typeof anyR.abort === 'function') {
+      anyR.abort()
+    } else {
+      anyR.stop()
+    }
+  } catch {
+    try {
+      r.stop()
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 function toggleVoice() {
-  type SpeechRecCtor = new () => { start: () => void; stop: () => void; lang: string; continuous: boolean; interimResults: boolean; onresult: ((ev: unknown) => void) | null; onerror: (() => void) | null; onend: (() => void) | null }
+  type SpeechRecCtor = new () => {
+    start: () => void
+    stop: () => void
+    abort?: () => void
+    lang: string
+    continuous: boolean
+    interimResults: boolean
+    onresult: ((ev: unknown) => void) | null
+    onerror: (() => void) | null
+    onend: (() => void) | null
+  }
   const w = window as unknown as { SpeechRecognition?: SpeechRecCtor; webkitSpeechRecognition?: SpeechRecCtor }
   const SR = w.SpeechRecognition || w.webkitSpeechRecognition
   if (!SR) {
     ElMessage.warning(t('chat.voiceUnsupported'))
     return
   }
-  if (voiceRecording.value) {
-    speechRec?.stop()
+  if (voiceRecording.value || speechRec) {
+    stopVoiceCapture()
     return
   }
   voiceDraftBase = chat.inputDraft
@@ -389,6 +417,7 @@ function toggleVoice() {
   }
   speechRec.onerror = () => {
     voiceRecording.value = false
+    speechRec = null
     voiceDraftBase = ''
   }
   speechRec.onend = () => {
@@ -397,7 +426,14 @@ function toggleVoice() {
     voiceDraftBase = ''
   }
   voiceRecording.value = true
-  speechRec.start()
+  try {
+    speechRec.start()
+  } catch {
+    voiceRecording.value = false
+    speechRec = null
+    voiceDraftBase = ''
+    ElMessage.warning(t('chat.voiceUnsupported'))
+  }
 }
 
 function openImagePicker() {
@@ -1123,7 +1159,8 @@ function askFollowUp(q: string) {
             :disabled="chat.sending || uploadBusy"
             @click="toggleVoice"
           >
-            <el-icon class="fab-icon"><Microphone /></el-icon>
+            <el-icon v-if="voiceRecording" class="fab-icon"><Close /></el-icon>
+            <el-icon v-else class="fab-icon"><Microphone /></el-icon>
           </el-button>
         </el-tooltip>
         <el-tooltip hide-after="0" :content="t('chat.upload')" placement="top">
