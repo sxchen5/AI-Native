@@ -43,7 +43,6 @@ const props = defineProps<{
 const bottomAnchor = ref<HTMLElement | null>(null)
 const msgScrollEl = ref<HTMLElement | null>(null)
 const showJumpToBottom = ref(false)
-let scrollThumbTimer: ReturnType<typeof setTimeout> | null = null
 const userEdits = reactive<Record<string, string>>({})
 const hoveringRow = reactive<Record<string, boolean>>({})
 const editingUserId = ref<string | null>(null)
@@ -58,6 +57,11 @@ let voiceDraftBase = ''
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let speechRec: any = null
 const imageInputRef = ref<HTMLInputElement | null>(null)
+
+/** 画布内嵌：输入区更矮；全屏略高 */
+const composerAutosize = computed(() =>
+  props.hideThreadHead ? { minRows: 3, maxRows: 8 } : { minRows: 4, maxRows: 10 },
+)
 
 function md(html: string) {
   return renderAiMarkdown(html)
@@ -122,14 +126,6 @@ function updateScrollBottomState() {
 
 function onMsgScroll() {
   updateScrollBottomState()
-  const el = msgScrollEl.value
-  if (!el) return
-  el.classList.add('u-scroll--active')
-  if (scrollThumbTimer) clearTimeout(scrollThumbTimer)
-  scrollThumbTimer = setTimeout(() => {
-    el.classList.remove('u-scroll--active')
-    scrollThumbTimer = null
-  }, 900)
 }
 
 function jumpToLatest() {
@@ -179,8 +175,6 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (scrollThumbTimer) clearTimeout(scrollThumbTimer)
-  msgScrollEl.value?.classList.remove('u-scroll--active')
   window.removeEventListener('resize', updateScrollBottomState)
   try {
     speechRec?.stop()
@@ -671,8 +665,7 @@ function askFollowUp(q: string) {
     <div class="main-mid">
     <div
       ref="msgScrollEl"
-      class="msg-scroll u-scroll"
-      :class="{ 'msg-scroll--jump': showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding }"
+      class="msg-scroll msg-scroll--native"
       @scroll.passive="onMsgScroll"
     >
       <div v-if="!chat.activeSessionId" class="landing">
@@ -905,9 +898,20 @@ function askFollowUp(q: string) {
           </div>
         </div>
         <div ref="bottomAnchor" class="anchor" />
+      </div>
+    </div>
+
+    <footer
+      class="composer"
+      :class="{
+        'composer--jump':
+          showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding,
+      }"
+    >
+      <div class="composer-inner">
         <div
           v-if="showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding"
-          class="jump-float"
+          class="jump-above-input"
         >
           <el-tooltip hide-after="0" :content="t('chat.jumpToBottom')" placement="top">
             <el-button class="jump-btn" circle @click="jumpToLatest">
@@ -915,11 +919,6 @@ function askFollowUp(q: string) {
             </el-button>
           </el-tooltip>
         </div>
-      </div>
-    </div>
-
-    <footer class="composer">
-      <div class="composer-inner">
         <input
           ref="fileInputRef"
           type="file"
@@ -945,7 +944,7 @@ function askFollowUp(q: string) {
         <el-input
           v-model="chat.inputDraft"
           type="textarea"
-          :autosize="{ minRows: 5, maxRows: 10 }"
+          :autosize="composerAutosize"
           resize="none"
           class="composer-input"
           :placeholder="t('chat.inputPlaceholder')"
@@ -1174,26 +1173,22 @@ function askFollowUp(q: string) {
   scroll-behavior: smooth;
   padding: 20px 16px 12px;
   background: var(--bg-chat-surface);
-  position: relative;
 }
-/* 为底部悬浮「回到底部」预留空间，避免遮挡最后几条消息 */
-.msg-scroll--jump {
-  padding-bottom: 56px;
+/* 滚动条不占布局宽度（仍可滚轮滚动；悬停时 WebKit 可显示极细提示轨） */
+.msg-scroll--native {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
-
-.jump-float {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 10px;
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
-  z-index: 4;
-  background: transparent;
+.msg-scroll--native::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
-.jump-float :deep(.el-tooltip__trigger) {
-  pointer-events: auto;
+.msg-scroll--native:hover::-webkit-scrollbar {
+  width: 4px;
+}
+.msg-scroll--native:hover::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.45);
+  border-radius: 999px;
 }
 
 .follow-up-inline {
@@ -1261,7 +1256,7 @@ function askFollowUp(q: string) {
 
 .doc-card-wrap {
   width: 100%;
-  max-width: min(640px, 100%);
+  max-width: var(--chat-content-max, min(940px, calc(100% - 100px)));
 }
 
 .doc-card {
@@ -1573,11 +1568,29 @@ function askFollowUp(q: string) {
   background: var(--bg-chat-surface);
   padding: 12px 16px 14px;
 }
+.composer--jump {
+  padding-top: 52px;
+}
 
 .composer-inner {
   position: relative;
   max-width: var(--chat-content-max, min(940px, calc(100% - 100px)));
   margin: 0 auto;
+}
+
+/* 单独圆圈悬浮在输入框正上方，不参与消息区滚动 */
+.jump-above-input {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 6;
+}
+.jump-above-input :deep(.el-tooltip__trigger) {
+  pointer-events: auto;
 }
 
 .pending-chips {
@@ -1626,11 +1639,15 @@ function askFollowUp(q: string) {
 .composer-input :deep(.el-textarea__inner) {
   border-radius: var(--radius-lg, 14px);
   padding: 12px 168px 12px 14px;
-  min-height: 138px !important;
+  min-height: 108px !important;
   background: var(--bg-elevated) !important;
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.main--embedded .composer-input :deep(.el-textarea__inner) {
+  min-height: 88px !important;
 }
 
 .image-fab {
