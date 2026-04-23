@@ -40,18 +40,29 @@ const histScrollEl = ref<HTMLElement | null>(null)
 /** 历史标题是否被省略，仅此时显示完整标题 tooltip */
 const sessionTitleTruncated = reactive<Record<string, boolean>>({})
 const sessionTitleResizeObservers = new Map<string, ResizeObserver>()
+/** 避免 v-for 的 ref 回调在每次 patch 重复执行时反复改 reactive 导致渲染死循环 */
+const sessionTitleLastEl = new Map<string, HTMLElement | null>()
 
 function bindSessionTitleEl(sessionId: string, el: unknown) {
-  const prev = sessionTitleResizeObservers.get(sessionId)
-  prev?.disconnect()
-  sessionTitleResizeObservers.delete(sessionId)
-  delete sessionTitleTruncated[sessionId]
+  const node = (el as HTMLElement | null) ?? null
+  if (sessionTitleLastEl.get(sessionId) === node) {
+    return
+  }
+  sessionTitleLastEl.set(sessionId, node)
 
-  const node = el as HTMLElement | null
-  if (!node) return
+  sessionTitleResizeObservers.get(sessionId)?.disconnect()
+  sessionTitleResizeObservers.delete(sessionId)
+
+  if (!node) {
+    delete sessionTitleTruncated[sessionId]
+    return
+  }
 
   const update = () => {
-    sessionTitleTruncated[sessionId] = node.scrollWidth > node.clientWidth + 1
+    const next = node.scrollWidth > node.clientWidth + 1
+    if (sessionTitleTruncated[sessionId] !== next) {
+      sessionTitleTruncated[sessionId] = next
+    }
   }
   const ro = new ResizeObserver(() => update())
   ro.observe(node)
@@ -152,6 +163,7 @@ onBeforeUnmount(() => {
     ro.disconnect()
   }
   sessionTitleResizeObservers.clear()
+  sessionTitleLastEl.clear()
 })
 
 async function onLogout() {
