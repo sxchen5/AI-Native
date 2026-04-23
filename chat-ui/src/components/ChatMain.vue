@@ -1235,13 +1235,7 @@ function askFollowUp(q: string) {
       </div>
     </div>
 
-    <footer
-      class="composer"
-      :class="{
-        'composer--jump':
-          showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding,
-      }"
-    >
+    <footer class="composer">
       <div class="composer-inner">
         <div
           v-if="showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding"
@@ -2160,10 +2154,6 @@ function askFollowUp(q: string) {
   background: var(--bg-chat-surface);
   padding: 12px 16px 14px;
 }
-.composer--jump {
-  padding-top: 52px;
-}
-
 .composer-inner {
   position: relative;
   max-width: var(--chat-content-max, min(890px, calc(100% - 150px)));
@@ -2175,7 +2165,7 @@ function askFollowUp(q: string) {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: calc(100% + 8px);
+  bottom: calc(100% + 15px);
   display: flex;
   justify-content: center;
   pointer-events: none;
