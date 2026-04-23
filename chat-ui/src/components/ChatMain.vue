@@ -2152,7 +2152,7 @@ function askFollowUp(q: string) {
 
 .composer {
   background: var(--bg-chat-surface);
-  padding: 12px 16px 14px;
+  padding: 0px 22px 12px 12px;
 }
 .composer-inner {
   position: relative;
