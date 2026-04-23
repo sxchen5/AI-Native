@@ -14,9 +14,10 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 
 import type { SessionSummary } from '../api/types'
-import IconAiAvatar from './icons/IconAiAvatar.vue'
+import IconAppFavicon from './icons/IconAppFavicon.vue'
 import IconSessionBubble from './icons/IconSessionBubble.vue'
 import { useAuthStore } from '../stores/auth'
 import { useChatStore } from '../stores/chat'
@@ -26,6 +27,8 @@ import { useThemeStore } from '../stores/theme'
 import { useUiStore } from '../stores/ui'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const chat = useChatStore()
 const ui = useUiStore()
 const auth = useAuthStore()
@@ -42,23 +45,22 @@ function resolvePresetIcon(name: string) {
   return (comp as typeof Icons.UserFilled) || Icons.UserFilled
 }
 
-function isEmptyNewSession(): boolean {
-  if (!chat.activeSessionId) return false
-  return chat.messages.length === 0
-}
-
 async function onNew() {
-  if (isEmptyNewSession()) {
+  const draftEmpty = !chat.activeSessionId && chat.messages.length === 0
+  const sessionEmpty = !!chat.activeSessionId && chat.messages.length === 0
+  if (draftEmpty || sessionEmpty) {
     ElMessage.info(t('session.alreadyEmpty'))
     return
   }
-  try {
-    await chat.createSession()
-    await nextTick()
-    histScrollEl.value?.scrollTo({ top: 0, behavior: 'smooth' })
-  } catch (e: unknown) {
-    ElMessage.error((e as Error).message || t('errors.createSession'))
+  chat.setActiveSession(null)
+  if (route.name === 'chat') {
+    const sid = typeof route.params.sessionId === 'string' ? route.params.sessionId : ''
+    if (sid) {
+      void router.replace({ name: 'chat' })
+    }
   }
+  await nextTick()
+  histScrollEl.value?.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 async function onSelect(s: SessionSummary) {
@@ -141,16 +143,16 @@ async function onLogout() {
   <aside class="sidebar" :class="{ collapsed: ui.sidebarCollapsedEffective }">
     <div class="sidebar-top">
       <div class="brand" v-show="!ui.sidebarCollapsedEffective">
-        <div class="logo" aria-hidden="true">
-          <IconAiAvatar class="brand-ai-icon" />
+        <div class="logo logo--favicon" aria-hidden="true">
+          <IconAppFavicon />
         </div>
         <div class="brand-text">
           <span class="brand-name">{{ t('app.name') }}</span>
         </div>
       </div>
       <div v-show="ui.sidebarCollapsedEffective" class="brand-mini">
-        <div class="logo small" aria-hidden="true">
-          <IconAiAvatar class="brand-ai-icon small" />
+        <div class="logo logo--favicon small" aria-hidden="true">
+          <IconAppFavicon small />
         </div>
       </div>
       <el-tooltip hide-after="0" :content="ui.sidebarCollapsedEffective ? t('session.expand') : t('session.collapse')" placement="bottom">
@@ -359,20 +361,14 @@ async function onLogout() {
   place-items: center;
   flex-shrink: 0;
 }
+.logo--favicon {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+}
 .logo.small {
   width: 32px;
   height: 32px;
   border-radius: 9px;
-}
-
-.brand-ai-icon {
-  width: 22px;
-  height: 22px;
-  color: #fff;
-}
-.brand-ai-icon.small {
-  width: 20px;
-  height: 20px;
 }
 
 .brand-name {
@@ -396,10 +392,10 @@ async function onLogout() {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px;
+  padding: 14px;
   margin-top: 10px;
   margin-bottom: 10px;
-  border-radius: 999px;
+  border-radius: 12px;
   border: 1px solid var(--accent-soft);
   background: linear-gradient(180deg, rgba(59, 108, 255, 0.08) 0%, rgba(59, 108, 255, 0.03) 100%);
   color: var(--accent);

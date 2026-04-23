@@ -985,7 +985,6 @@ function askFollowUp(q: string) {
     >
       <div v-if="!chat.activeSessionId" class="landing">
         <h2 class="land-greeting">{{ t('chat.landGreeting') }}</h2>
-        <p class="land-disclaimer">{{ t('chat.landDisclaimer') }}</p>
         <div v-if="loadingLandingSuggestions" class="landing-suggest-loading" aria-busy="true">
           <el-icon class="landing-suggest-spin"><Loading /></el-icon>
         </div>
@@ -1004,7 +1003,6 @@ function askFollowUp(q: string) {
       <div v-else-if="chat.loadingMessages" class="muted center">{{ t('chat.loadingMessages') }}</div>
       <div v-else-if="showLanding" class="landing">
         <h2 class="land-greeting">{{ t('chat.landGreeting') }}</h2>
-        <p class="land-disclaimer">{{ t('chat.landDisclaimer') }}</p>
         <div v-if="loadingLandingSuggestions" class="landing-suggest-loading" aria-busy="true">
           <el-icon class="landing-suggest-spin"><Loading /></el-icon>
         </div>
@@ -1681,12 +1679,6 @@ function askFollowUp(q: string) {
   font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--text-primary);
-}
-
-.land-disclaimer {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-muted);
 }
 
 .suggestion-grid {

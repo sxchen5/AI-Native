@@ -35,8 +35,8 @@ watch(
     if (next === cur) return
     if (id) {
       void router.replace({ name: 'chat', params: { sessionId: id } })
-    } else if (!cur) {
-      // 地址栏已是「无会话」时才同步清空；避免刷新 /chat/:id 时 store 尚未赋值就把路由打回 /chat
+    } else if (cur) {
+      // 新对话等场景：store 清空会话时同步去掉 URL 中的 sessionId
       void router.replace({ name: 'chat' })
     }
   },
