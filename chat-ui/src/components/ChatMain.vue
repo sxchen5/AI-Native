@@ -23,6 +23,7 @@ import { useRouter } from 'vue-router'
 import * as chatApi from '../api/chatApi'
 import type { ChatMessage, DocumentCardMeta } from '../api/types'
 import { useChatStore } from '../stores/chat'
+import { extractChatMarkdownHeadingToc, type ChatHeadingTocItem } from '../utils/chatMarkdownHeadings'
 import { renderAiMarkdown } from '../utils/markdown'
 import { markdownToPlainText } from '../utils/plainText'
 import IconCopyLayers from './icons/IconCopyLayers.vue'
@@ -44,6 +45,9 @@ const props = defineProps<{
 
 const bottomAnchor = ref<HTMLElement | null>(null)
 const msgScrollEl = ref<HTMLElement | null>(null)
+/** 当前用于右侧 Markdown 目录的助手消息 id（按滚动区域可见度选取） */
+const activeOutlineMessageId = ref<string | null>(null)
+let outlineScrollRaf = 0
 const showJumpToBottom = ref(false)
 let scrollThumbTimer: ReturnType<typeof setTimeout> | null = null
 const userEdits = reactive<Record<string, string>>({})
@@ -113,10 +117,6 @@ const composerAutosize = computed(() =>
   props.hideThreadHead ? { minRows: 2, maxRows: 8 } : { minRows: 4, maxRows: 10 },
 )
 
-function md(html: string) {
-  return renderAiMarkdown(html)
-}
-
 function isLastMessage(idx: number) {
   return idx === chat.messages.length - 1
 }
@@ -176,6 +176,7 @@ function updateScrollBottomState() {
 
 function onMsgScroll() {
   updateScrollBottomState()
+  updateActiveOutlineFromScroll()
   const el = msgScrollEl.value
   if (!el) return
   el.classList.add('u-scroll--active')
@@ -232,7 +233,10 @@ watch(
   () => {
     syncUserEditsFromMessages()
     void scrollToBottom(true)
-    void nextTick(() => updateScrollBottomState())
+    void nextTick(() => {
+      updateScrollBottomState()
+      updateActiveOutlineFromScroll()
+    })
   },
   { deep: true, immediate: true },
 )
@@ -242,6 +246,7 @@ watch(
   () => {
     editingUserId.value = null
     followUpQuestions.value = []
+    activeOutlineMessageId.value = null
     void scrollToBottom(false)
     void nextTick(() => updateScrollBottomState())
   },
@@ -251,7 +256,10 @@ watch(
   () => chat.loadingMessages,
   (v) => {
     if (!v) {
-      void nextTick(() => updateScrollBottomState())
+      void nextTick(() => {
+        updateScrollBottomState()
+        updateActiveOutlineFromScroll()
+      })
       void loadFollowUps()
     }
   },
@@ -288,6 +296,7 @@ onMounted(() => {
   window.addEventListener('resize', updateScrollBottomState, { passive: true })
   void nextTick(() => {
     updateScrollBottomState()
+    updateActiveOutlineFromScroll()
     bindComposerTextareaScroll()
   })
 })
@@ -304,6 +313,10 @@ onBeforeUnmount(() => {
   }
   ttsMessageId.value = null
   stopVoiceCapture()
+  if (outlineScrollRaf) {
+    cancelAnimationFrame(outlineScrollRaf)
+    outlineScrollRaf = 0
+  }
 })
 
 async function copyText(text: string) {
@@ -716,6 +729,70 @@ function docMeta(m: ChatMessage): DocumentCardMeta | null {
   return parseDocumentMeta(m.metadata ?? undefined)
 }
 
+function mdMessage(m: ChatMessage) {
+  return renderAiMarkdown(m.content, m.id)
+}
+
+/** 每条助手气泡的 Markdown 标题目录（无标题的消息不在 Map 中） */
+const assistantOutlineByMessageId = computed(() => {
+  const map = new Map<string, ChatHeadingTocItem[]>()
+  for (const m of chat.messages) {
+    if (m.role !== 'ASSISTANT' || docMeta(m)) continue
+    const text = (m.content || '').trim()
+    if (!text) continue
+    const items = extractChatMarkdownHeadingToc(text, m.id)
+    if (items.length) map.set(m.id, items)
+  }
+  return map
+})
+
+const outlineItems = computed<ChatHeadingTocItem[]>(() => {
+  if (props.hideThreadHead) return []
+  const id = activeOutlineMessageId.value
+  if (!id) return []
+  return assistantOutlineByMessageId.value.get(id) ?? []
+})
+
+async function scrollToHeading(anchorId: string) {
+  await nextTick()
+  const root = msgScrollEl.value
+  if (!root) return
+  const el = root.querySelector(`#${CSS.escape(anchorId)}`) as HTMLElement | null
+  el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function updateActiveOutlineFromScroll() {
+  if (outlineScrollRaf) cancelAnimationFrame(outlineScrollRaf)
+  outlineScrollRaf = requestAnimationFrame(() => {
+    outlineScrollRaf = 0
+    const scrollEl = msgScrollEl.value
+    if (!scrollEl || props.hideThreadHead) return
+    const rows = scrollEl.querySelectorAll<HTMLElement>('.row[data-outline-candidate="1"]')
+    if (!rows.length) {
+      activeOutlineMessageId.value = null
+      return
+    }
+    const top = scrollEl.scrollTop
+    const bottom = top + scrollEl.clientHeight
+    let bestId: string | null = null
+    let bestScore = -1
+    for (const row of rows) {
+      const off = row.offsetTop
+      const h = row.offsetHeight
+      const overlap = Math.max(0, Math.min(bottom, off + h) - Math.max(top, off))
+      if (overlap > bestScore) {
+        bestScore = overlap
+        bestId = row.dataset.messageId ?? null
+      }
+    }
+    activeOutlineMessageId.value = bestScore > 0 ? bestId : null
+  })
+}
+
+function isOutlineRowCandidate(m: ChatMessage) {
+  return m.role === 'ASSISTANT' && assistantOutlineByMessageId.value.has(m.id)
+}
+
 async function loadFollowUps() {
   const sid = chat.activeSessionId
   if (!sid || chat.sending || props.hideThreadHead) {
@@ -845,6 +922,10 @@ function askFollowUp(q: string) {
 
     <div class="main-mid">
     <div
+      class="scroll-layout"
+      :class="{ 'scroll-layout--outline': !props.hideThreadHead && outlineItems.length > 0 }"
+    >
+    <div
       ref="msgScrollEl"
       class="msg-scroll u-scroll"
       @scroll.passive="onMsgScroll"
@@ -895,6 +976,8 @@ function askFollowUp(q: string) {
           :key="m.id"
           class="row"
           :class="m.role === 'USER' ? 'end' : 'start'"
+          :data-message-id="m.id"
+          :data-outline-candidate="isOutlineRowCandidate(m) ? '1' : undefined"
           @mouseenter="onRowHover(m.id, true)"
           @mouseleave="onRowHover(m.id, false)"
         >
@@ -980,7 +1063,7 @@ function askFollowUp(q: string) {
               <div v-if="isAssistantStreaming(m)" class="typing" aria-hidden="true">
                 <span class="dot" /><span class="dot" /><span class="dot" />
               </div>
-              <div v-else class="prose-ai markdown-body" v-html="md(m.content)" />
+              <div v-else class="prose-ai markdown-body" v-html="mdMessage(m)" />
             </div>
 
             <div v-if="m.role === 'ASSISTANT' && docMeta(m)" class="ai-toolbar-slot">
@@ -1088,6 +1171,27 @@ function askFollowUp(q: string) {
         </div>
         <div ref="bottomAnchor" class="anchor" />
       </div>
+    </div>
+
+    <aside
+      v-if="!props.hideThreadHead && outlineItems.length > 0"
+      class="chat-md-outline u-scroll"
+      aria-label="markdown outline"
+    >
+      <div class="chat-md-outline-head">{{ t('chat.mdOutline') }}</div>
+      <nav class="chat-md-outline-nav">
+        <button
+          v-for="it in outlineItems"
+          :key="it.id"
+          type="button"
+          class="chat-md-outline-link"
+          :class="`depth-${it.depth}`"
+          @click="scrollToHeading(it.id)"
+        >
+          {{ it.text }}
+        </button>
+      </nav>
+    </aside>
     </div>
 
     <footer
@@ -1203,7 +1307,7 @@ function askFollowUp(q: string) {
   min-width: 0;
   min-height: 0;
   background: var(--bg-chat-surface);
-  --chat-content-max: min(940px, calc(100% - 100px));
+  --chat-content-max: min(890px, calc(100% - 150px));
 }
 
 /* 消息区 + 回到底部条 + 输入区：占满标题下方剩余高度 */
@@ -1212,6 +1316,89 @@ function askFollowUp(q: string) {
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+.scroll-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.scroll-layout--outline .msg-scroll {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-md-outline {
+  display: none;
+  flex-shrink: 0;
+  width: 200px;
+  max-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 10px 12px 14px;
+  border-left: 1px solid var(--border-subtle);
+  background: var(--bg-chat-surface);
+}
+
+.scroll-layout--outline .chat-md-outline {
+  display: block;
+}
+
+.chat-md-outline-head {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.chat-md-outline-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chat-md-outline-link {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 5px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.chat-md-outline-link:hover {
+  background: var(--bg-input-fill);
+  color: var(--text-primary);
+}
+
+.chat-md-outline-link.depth-1 {
+  font-weight: 600;
+}
+.chat-md-outline-link.depth-2 {
+  padding-left: 8px;
+}
+.chat-md-outline-link.depth-3 {
+  padding-left: 14px;
+  font-size: 11.5px;
+}
+.chat-md-outline-link.depth-4,
+.chat-md-outline-link.depth-5,
+.chat-md-outline-link.depth-6 {
+  padding-left: 20px;
+  font-size: 11px;
 }
 
 .embed-bar {
@@ -1340,7 +1527,7 @@ function askFollowUp(q: string) {
 }
 
 .thread-head-inner {
-  max-width: var(--chat-content-max, min(940px, calc(100% - 100px)));
+  max-width: var(--chat-content-max, min(890px, calc(100% - 150px)));
   margin: 0 auto;
   text-align: center;
 }
@@ -1386,7 +1573,7 @@ function askFollowUp(q: string) {
 .follow-up-inline {
   margin-top: 10px;
   width: 100%;
-  max-width: var(--chat-content-max, min(940px, calc(100% - 100px)));
+  max-width: var(--chat-content-max, min(890px, calc(100% - 150px)));
 }
 
 .follow-up-inline-chips {
@@ -1448,7 +1635,7 @@ function askFollowUp(q: string) {
 
 .doc-card-wrap {
   width: 100%;
-  max-width: var(--chat-content-max, min(940px, calc(100% - 100px)));
+  max-width: var(--chat-content-max, min(890px, calc(100% - 150px)));
 }
 
 .doc-card {
@@ -1582,7 +1769,7 @@ function askFollowUp(q: string) {
 }
 
 .msg-inner {
-  max-width: var(--chat-content-max, min(940px, calc(100% - 100px)));
+  max-width: var(--chat-content-max, min(890px, calc(100% - 150px)));
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -1771,7 +1958,7 @@ function askFollowUp(q: string) {
 
 .composer-inner {
   position: relative;
-  max-width: var(--chat-content-max, min(940px, calc(100% - 100px)));
+  max-width: var(--chat-content-max, min(890px, calc(100% - 150px)));
   margin: 0 auto;
 }
 

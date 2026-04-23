@@ -6,9 +6,14 @@ import json from 'highlight.js/lib/languages/json'
 import python from 'highlight.js/lib/languages/python'
 import typescript from 'highlight.js/lib/languages/typescript'
 import xml from 'highlight.js/lib/languages/xml'
+import type { Token, Tokens } from 'marked'
 import { Marked, Renderer } from 'marked'
 
+import { chatHeadingPlainText, sanitizeMessageIdForHeadingPrefix, slugifyChatHeadingId } from './chatMarkdownHeadings'
+
 import 'highlight.js/styles/github.css'
+
+export { extractChatMarkdownHeadingToc } from './chatMarkdownHeadings'
 
 hljs.registerLanguage('javascript', javascript)
 hljs.registerLanguage('typescript', typescript)
@@ -79,7 +84,20 @@ function preprocessMarkdown(raw: string): string {
   return preprocessGithubAlerts(raw)
 }
 
+/** 单次 {@link renderAiMarkdown} 解析内为标题 id 去重 */
+let headingSlugRegistry: Set<string> | null = null
+/** 当前气泡 messageId 前缀，避免跨消息 id 冲突 */
+let headingIdPrefix = ''
+
 class AiRenderer extends Renderer {
+  override heading({ tokens, depth }: Tokens.Heading) {
+    const used = headingSlugRegistry ?? new Set<string>()
+    const plain = chatHeadingPlainText(tokens as Token[])
+    const id = escapeHtml(headingIdPrefix + slugifyChatHeadingId(plain, used))
+    const inner = this.parser.parseInline(tokens)
+    return `<h${depth} id="${id}">${inner}</h${depth}>\n`
+  }
+
   override code({ text, lang }: { text: string; lang?: string }) {
     const language = lang && hljs.getLanguage(lang) ? lang : 'plaintext'
     let highlighted: string
@@ -103,15 +121,25 @@ const marked = new Marked({
 
 const PURIFY_OPTS = {
   USE_PROFILES: { html: true },
-  ADD_ATTR: ['align'],
+  ADD_ATTR: ['align', 'id'],
 }
 
 /**
  * 将 AI 文本渲染为安全的 HTML（Markdown + GFM 表格 + 代码高亮 + GitHub 风格提示块）。
  * 外层需配合 `github-markdown-css` 的 `.markdown-body` 使用（与 `.prose-ai` 同节点）。
  */
-export function renderAiMarkdown(raw: string): string {
+/**
+ * @param messageId 可选；传入时为标题 id 加前缀，与 {@link extractChatMarkdownHeadingToc} 一致且避免多气泡 id 重复
+ */
+export function renderAiMarkdown(raw: string, messageId?: string): string {
   const md = preprocessMarkdown(raw || '')
-  const html = marked.parse(md, { async: false }) as string
-  return DOMPurify.sanitize(html, PURIFY_OPTS) as unknown as string
+  headingSlugRegistry = new Set<string>()
+  headingIdPrefix = messageId ? `${sanitizeMessageIdForHeadingPrefix(messageId)}-` : ''
+  try {
+    const html = marked.parse(md, { async: false }) as string
+    return DOMPurify.sanitize(html, PURIFY_OPTS) as unknown as string
+  } finally {
+    headingSlugRegistry = null
+    headingIdPrefix = ''
+  }
 }

@@ -15,7 +15,7 @@
   },
   "app": {
     "name": "AI助手",
-    "tagline": "Spring AI · 流式对话"
+    "tagline": "内容由 AI 生成，请仔细甄别"
   },
   "settings": {
     "title": "设置",
@@ -103,6 +103,7 @@
     "speakStop": "停止朗读",
     "toCanvas": "转为文档编辑",
     "jumpToBottom": "回到底部",
+    "mdOutline": "本页标题",
     "upload": "上传文件",
     "uploadImage": "上传图片",
     "uploading": "正在解析文件…",

@@ -15,7 +15,7 @@
   },
   "app": {
     "name": "AI Assistant",
-    "tagline": "Spring AI · Streaming chat"
+    "tagline": "AI-generated content — please verify."
   },
   "settings": {
     "title": "Settings",
@@ -103,6 +103,7 @@
     "speakStop": "Stop reading",
     "toCanvas": "Open as document",
     "jumpToBottom": "Scroll to bottom",
+    "mdOutline": "On-page headings",
     "upload": "Upload file",
     "uploadImage": "Upload image",
     "uploading": "Extracting text…",
