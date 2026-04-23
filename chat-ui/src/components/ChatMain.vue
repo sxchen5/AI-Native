@@ -753,19 +753,39 @@ const outlineItems = computed<ChatHeadingTocItem[]>(() => {
   return assistantOutlineByMessageId.value.get(id) ?? []
 })
 
+function flashHeading(el: HTMLElement) {
+  el.classList.remove('chat-md-heading-flash')
+  void el.offsetWidth
+  el.classList.add('chat-md-heading-flash')
+  window.setTimeout(() => el.classList.remove('chat-md-heading-flash'), 900)
+}
+
 async function scrollToHeading(anchorId: string) {
   await nextTick()
   const scrollEl = msgScrollEl.value
   if (!scrollEl) return
   const el = scrollEl.querySelector(`#${CSS.escape(anchorId)}`) as HTMLElement | null
   if (!el) return
-  const pad = 10
-  const relTop = el.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop
+  const pad = 12
   const maxTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight)
+  const targetTop = () => {
+    const st = scrollEl.getBoundingClientRect().top
+    const et = el.getBoundingClientRect().top
+    return scrollEl.scrollTop + (et - st) - pad
+  }
   scrollEl.scrollTo({
-    top: Math.max(0, Math.min(relTop - pad, maxTop)),
+    top: Math.max(0, Math.min(targetTop(), maxTop)),
     behavior: 'smooth',
   })
+  /** smooth 滚动结束后再校正一次并闪烁（避免未滚到位） */
+  const runFlash = () => {
+    scrollEl.scrollTo({
+      top: Math.max(0, Math.min(targetTop(), maxTop)),
+      behavior: 'auto',
+    })
+    flashHeading(el)
+  }
+  window.setTimeout(runFlash, 480)
 }
 
 function updateActiveOutlineFromScroll() {
@@ -927,11 +947,8 @@ function askFollowUp(q: string) {
       </div>
     </header>
 
-    <div class="main-mid">
-    <div
-      class="scroll-layout"
-      :class="{ 'scroll-layout--outline': !props.hideThreadHead && outlineItems.length > 0 }"
-    >
+    <div class="main-mid" :class="{ 'main-mid--toc': !props.hideThreadHead && outlineItems.length > 0 }">
+    <div class="scroll-layout">
     <div class="chat-column">
     <div
       ref="msgScrollEl"
@@ -1284,6 +1301,7 @@ function askFollowUp(q: string) {
       </div>
     </footer>
     </div>
+    </div>
 
     <aside
       v-if="!props.hideThreadHead && outlineItems.length > 0"
@@ -1304,7 +1322,6 @@ function askFollowUp(q: string) {
         </button>
       </nav>
     </aside>
-    </div>
     </div>
   </main>
 </template>
@@ -1349,6 +1366,12 @@ function askFollowUp(q: string) {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+/** 有 Markdown 目录时略留右侧空隙，避免正文与悬浮层完全重叠 */
+.main-mid--toc .scroll-layout {
+  padding-right: 8px;
 }
 
 .scroll-layout {
@@ -1360,22 +1383,21 @@ function askFollowUp(q: string) {
   min-width: 0;
 }
 
-/* 消息列表 + 输入框同一列，与右侧目录并排时宽度一致，避免输入区比消息区宽 */
+/* 消息列表 + 输入框同一列 */
 .chat-column {
-  flex: 1 1 0;
+  flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
-.scroll-layout--outline .chat-column {
-  min-width: 0;
-}
-
 .chat-md-outline {
-  display: none;
-  flex-shrink: 0;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
   width: 200px;
   max-height: 100%;
   overflow-y: auto;
@@ -1383,10 +1405,29 @@ function askFollowUp(q: string) {
   padding: 12px 10px 12px 14px;
   border-left: 1px solid var(--border-subtle);
   background: var(--bg-chat-surface);
+  opacity: 0.98;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: -8px 0 28px rgba(15, 23, 42, 0.08);
+  z-index: 4;
+  pointer-events: auto;
 }
 
-.scroll-layout--outline .chat-md-outline {
-  display: block;
+/* 点击目录定位后：标题闪烁两次（v-html 内须用 :deep） */
+:deep(.prose-ai.markdown-body .chat-md-heading-flash) {
+  animation: chat-md-heading-flash 0.28s ease-in-out 2;
+  border-radius: 4px;
+}
+@keyframes chat-md-heading-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    background-color: transparent;
+  }
+  50% {
+    box-shadow: 0 0 0 3px var(--accent-soft);
+    background-color: var(--bg-input-fill);
+  }
 }
 
 .chat-md-outline-head {
