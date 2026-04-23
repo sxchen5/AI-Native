@@ -14,7 +14,7 @@ import {
   TopRight,
 } from '@element-plus/icons-vue'
 import { FullScreen } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElInput, ElMessage, ElMessageBox } from 'element-plus'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -58,6 +58,8 @@ let voiceDraftBase = ''
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let speechRec: any = null
 const imageInputRef = ref<HTMLInputElement | null>(null)
+const composerInputRef = ref<InstanceType<typeof ElInput> | null>(null)
+let composerScrollTimer: ReturnType<typeof setTimeout> | null = null
 
 /** 画布内嵌：输入区更矮；全屏略高 */
 const composerAutosize = computed(() =>
@@ -141,6 +143,43 @@ function jumpToLatest() {
   void scrollToBottom(true)
 }
 
+function getComposerTextarea(): HTMLTextAreaElement | null {
+  const inst = composerInputRef.value as unknown as { $el?: HTMLElement } | null
+  const root = inst?.$el
+  if (!root) return null
+  return root.querySelector('textarea')
+}
+
+function onComposerTextareaScroll() {
+  const ta = getComposerTextarea()
+  if (!ta) return
+  ta.classList.add('u-scroll--active')
+  if (composerScrollTimer) clearTimeout(composerScrollTimer)
+  composerScrollTimer = setTimeout(() => {
+    ta.classList.remove('u-scroll--active')
+    composerScrollTimer = null
+  }, 900)
+}
+
+function bindComposerTextareaScroll() {
+  const ta = getComposerTextarea()
+  if (!ta) return
+  ta.classList.add('u-scroll')
+  ta.addEventListener('scroll', onComposerTextareaScroll, { passive: true })
+}
+
+function unbindComposerTextareaScroll() {
+  if (composerScrollTimer) {
+    clearTimeout(composerScrollTimer)
+    composerScrollTimer = null
+  }
+  const ta = getComposerTextarea()
+  if (ta) {
+    ta.removeEventListener('scroll', onComposerTextareaScroll)
+    ta.classList.remove('u-scroll', 'u-scroll--active')
+  }
+}
+
 watch(
   () => chat.messages,
   () => {
@@ -178,12 +217,36 @@ watch(
   },
 )
 
+watch(
+  () => chat.inputDraft,
+  () => {
+    void nextTick(() => {
+      unbindComposerTextareaScroll()
+      bindComposerTextareaScroll()
+    })
+  },
+)
+
+watch(
+  () => props.hideThreadHead,
+  () => {
+    void nextTick(() => {
+      unbindComposerTextareaScroll()
+      bindComposerTextareaScroll()
+    })
+  },
+)
+
 onMounted(() => {
   window.addEventListener('resize', updateScrollBottomState, { passive: true })
-  void nextTick(() => updateScrollBottomState())
+  void nextTick(() => {
+    updateScrollBottomState()
+    bindComposerTextareaScroll()
+  })
 })
 
 onBeforeUnmount(() => {
+  unbindComposerTextareaScroll()
   if (scrollThumbTimer) clearTimeout(scrollThumbTimer)
   msgScrollEl.value?.classList.remove('u-scroll--active')
   window.removeEventListener('resize', updateScrollBottomState)
@@ -204,9 +267,10 @@ async function copyText(text: string) {
   }
 }
 
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault()
+function onKeydown(e: Event) {
+  const ke = e as KeyboardEvent
+  if (ke.key === 'Enter' && !ke.shiftKey) {
+    ke.preventDefault()
     void onSend()
   }
 }
@@ -953,6 +1017,7 @@ function askFollowUp(q: string) {
           </span>
         </div>
         <el-input
+          ref="composerInputRef"
           v-model="chat.inputDraft"
           type="textarea"
           :autosize="composerAutosize"
@@ -1274,9 +1339,9 @@ function askFollowUp(q: string) {
 
 .doc-card-grid {
   display: grid;
-  grid-template-columns: 1fr minmax(100px, 34%);
+  grid-template-columns: 1fr minmax(100px, 60%);
   gap: 0;
-  min-height: 88px;
+  min-height: 110px;
 }
 
 .doc-card-left {
@@ -1319,6 +1384,9 @@ function askFollowUp(q: string) {
   background: var(--bg-elevated);
   border-radius: 0 14px 14px 0;
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .doc-preview-label {
@@ -1332,7 +1400,9 @@ function askFollowUp(q: string) {
   font-size: 11px;
   line-height: 1.45;
   color: var(--text-secondary);
-  max-height: 52px;
+  max-height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   white-space: pre-wrap;
   word-break: break-word;
@@ -1639,6 +1709,31 @@ function askFollowUp(q: string) {
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* 多行输入出现纵向滚动条时，与 .u-scroll 相同的细滚动条交互 */
+.composer-input :deep(.el-textarea__inner.u-scroll) {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.composer-input :deep(.el-textarea__inner.u-scroll:hover),
+.composer-input :deep(.el-textarea__inner.u-scroll.u-scroll--active) {
+  scrollbar-color: #d9d9d9 transparent;
+}
+.composer-input :deep(.el-textarea__inner.u-scroll::-webkit-scrollbar) {
+  width: 5px;
+  height: 5px;
+}
+.composer-input :deep(.el-textarea__inner.u-scroll::-webkit-scrollbar-thumb) {
+  background-color: transparent;
+  border-radius: 999px;
+}
+.composer-input :deep(.el-textarea__inner.u-scroll:hover::-webkit-scrollbar-thumb),
+.composer-input :deep(.el-textarea__inner.u-scroll.u-scroll--active::-webkit-scrollbar-thumb) {
+  background-color: #d9d9d9;
+}
+.composer-input :deep(.el-textarea__inner.u-scroll::-webkit-scrollbar-track) {
+  background: transparent;
 }
 
 .main--embedded .composer-input :deep(.el-textarea__inner) {
