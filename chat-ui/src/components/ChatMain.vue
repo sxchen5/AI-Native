@@ -43,6 +43,7 @@ const props = defineProps<{
 const bottomAnchor = ref<HTMLElement | null>(null)
 const msgScrollEl = ref<HTMLElement | null>(null)
 const showJumpToBottom = ref(false)
+let scrollThumbTimer: ReturnType<typeof setTimeout> | null = null
 const userEdits = reactive<Record<string, string>>({})
 const hoveringRow = reactive<Record<string, boolean>>({})
 const editingUserId = ref<string | null>(null)
@@ -126,6 +127,14 @@ function updateScrollBottomState() {
 
 function onMsgScroll() {
   updateScrollBottomState()
+  const el = msgScrollEl.value
+  if (!el) return
+  el.classList.add('u-scroll--active')
+  if (scrollThumbTimer) clearTimeout(scrollThumbTimer)
+  scrollThumbTimer = setTimeout(() => {
+    el.classList.remove('u-scroll--active')
+    scrollThumbTimer = null
+  }, 900)
 }
 
 function jumpToLatest() {
@@ -175,6 +184,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (scrollThumbTimer) clearTimeout(scrollThumbTimer)
+  msgScrollEl.value?.classList.remove('u-scroll--active')
   window.removeEventListener('resize', updateScrollBottomState)
   try {
     speechRec?.stop()
@@ -665,7 +676,7 @@ function askFollowUp(q: string) {
     <div class="main-mid">
     <div
       ref="msgScrollEl"
-      class="msg-scroll msg-scroll--native"
+      class="msg-scroll u-scroll"
       @scroll.passive="onMsgScroll"
     >
       <div v-if="!chat.activeSessionId" class="landing">
@@ -1174,22 +1185,6 @@ function askFollowUp(q: string) {
   padding: 20px 16px 12px;
   background: var(--bg-chat-surface);
 }
-/* 滚动条不占布局宽度（仍可滚轮滚动；悬停时 WebKit 可显示极细提示轨） */
-.msg-scroll--native {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.msg-scroll--native::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
-.msg-scroll--native:hover::-webkit-scrollbar {
-  width: 4px;
-}
-.msg-scroll--native:hover::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.45);
-  border-radius: 999px;
-}
 
 .follow-up-inline {
   margin-top: 10px;
@@ -1279,13 +1274,13 @@ function askFollowUp(q: string) {
 
 .doc-card-grid {
   display: grid;
-  grid-template-columns: 1fr minmax(120px, 38%);
+  grid-template-columns: 1fr minmax(100px, 34%);
   gap: 0;
-  min-height: 120px;
+  min-height: 88px;
 }
 
 .doc-card-left {
-  padding: 14px 16px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1320,7 +1315,7 @@ function askFollowUp(q: string) {
 
 .doc-card-preview {
   border-left: 1px solid var(--border-subtle);
-  padding: 12px 12px 12px 14px;
+  padding: 8px 10px 8px 12px;
   background: var(--bg-elevated);
   border-radius: 0 14px 14px 0;
   min-width: 0;
@@ -1337,7 +1332,7 @@ function askFollowUp(q: string) {
   font-size: 11px;
   line-height: 1.45;
   color: var(--text-secondary);
-  max-height: 88px;
+  max-height: 52px;
   overflow: hidden;
   white-space: pre-wrap;
   word-break: break-word;

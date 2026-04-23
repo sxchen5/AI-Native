@@ -16,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.example.doubaoai.chatservice.domain.ChatRole;
 import com.example.doubaoai.chatservice.domain.StoredMessage;
+import com.example.doubaoai.chatservice.service.ChatTitleAiService;
 import com.example.doubaoai.chatservice.store.InMemoryChatStore;
 import com.example.doubaoai.chatservice.web.dto.ConvertDocumentRequest;
 import com.example.doubaoai.chatservice.web.dto.FreezeDocumentRequest;
@@ -37,10 +38,12 @@ public class ChatDocumentController {
 
     private final InMemoryChatStore store;
     private final ObjectMapper objectMapper;
+    private final ChatTitleAiService titleAiService;
 
-    public ChatDocumentController(InMemoryChatStore store, ObjectMapper objectMapper) {
+    public ChatDocumentController(InMemoryChatStore store, ObjectMapper objectMapper, ChatTitleAiService titleAiService) {
         this.store = store;
         this.objectMapper = objectMapper;
+        this.titleAiService = titleAiService;
     }
 
     @PostMapping("/convert")
@@ -56,7 +59,8 @@ public class ChatDocumentController {
                             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "只能转换助手消息");
                         }
                         String body = src.content() == null ? "" : src.content();
-                        String title = firstLineTitle(body);
+                        String aiTitle = titleAiService.summarizeDocumentTitle(body);
+                        String title = aiTitle.isBlank() ? firstLineTitle(body) : aiTitle;
                         Map<String, Object> meta = new LinkedHashMap<>();
                         meta.put("type", "document_card");
                         meta.put("title", title);
@@ -96,7 +100,8 @@ public class ChatDocumentController {
                             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "不是文档消息");
                         }
                         meta.put("markdownBody", req.markdownBody());
-                        meta.put("title", firstLineTitle(req.markdownBody()));
+                        String aiTitle = titleAiService.summarizeDocumentTitle(req.markdownBody());
+                        meta.put("title", aiTitle.isBlank() ? firstLineTitle(req.markdownBody()) : aiTitle);
                         String metaJson = writeMeta(meta);
                         store.updateMessageContentAndMetadata(req.sessionId(), req.messageId(), req.markdownBody(), metaJson);
                         StoredMessage updated = session.historySnapshot().stream()
