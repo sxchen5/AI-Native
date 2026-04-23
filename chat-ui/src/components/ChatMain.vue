@@ -62,6 +62,9 @@ const imageInputRef = ref<HTMLInputElement | null>(null)
 const composerInputRef = ref<InstanceType<typeof ElInput> | null>(null)
 let composerScrollTimer: ReturnType<typeof setTimeout> | null = null
 
+/** 当前朗读绑定的消息 id；再次点击同一消息的朗读按钮则取消 */
+const ttsMessageId = ref<string | null>(null)
+
 const showLanding = computed(
   () =>
     !!chat.activeSessionId &&
@@ -106,7 +109,7 @@ watch(
 
 /** 画布内嵌：输入区更矮；全屏略高 */
 const composerAutosize = computed(() =>
-  props.hideThreadHead ? { minRows: 3, maxRows: 8 } : { minRows: 4, maxRows: 10 },
+  props.hideThreadHead ? { minRows: 2, maxRows: 8 } : { minRows: 4, maxRows: 10 },
 )
 
 function md(html: string) {
@@ -293,6 +296,12 @@ onBeforeUnmount(() => {
   if (scrollThumbTimer) clearTimeout(scrollThumbTimer)
   msgScrollEl.value?.classList.remove('u-scroll--active')
   window.removeEventListener('resize', updateScrollBottomState)
+  try {
+    window.speechSynthesis.cancel()
+  } catch {
+    /* ignore */
+  }
+  ttsMessageId.value = null
   try {
     speechRec?.stop()
   } catch {
@@ -608,13 +617,37 @@ async function toggleFeedback(m: ChatMessage, v: 'up' | 'down') {
   }
 }
 
-function speakAssistant(text: string) {
+function isTtsBusyForMessage(messageId: string) {
+  return (
+    ttsMessageId.value === messageId &&
+    (window.speechSynthesis.speaking || window.speechSynthesis.pending)
+  )
+}
+
+function speakTooltip(messageId: string) {
+  return isTtsBusyForMessage(messageId) ? t('chat.speakStop') : t('chat.speak')
+}
+
+function speakAssistant(text: string, messageId: string) {
   const plain = markdownToPlainText(text)
   if (!plain) return
+  if (isTtsBusyForMessage(messageId)) {
+    window.speechSynthesis.cancel()
+    ttsMessageId.value = null
+    return
+  }
   window.speechSynthesis.cancel()
+  ttsMessageId.value = messageId
   const u = new SpeechSynthesisUtterance(plain)
   const loc = navigator.language || 'zh-CN'
   u.lang = loc.startsWith('zh') ? 'zh-CN' : 'en-US'
+  const finish = () => {
+    if (ttsMessageId.value === messageId) {
+      ttsMessageId.value = null
+    }
+  }
+  u.onend = finish
+  u.onerror = finish
   window.speechSynthesis.speak(u)
 }
 
@@ -930,8 +963,8 @@ function askFollowUp(q: string) {
                     <el-icon><TopRight /></el-icon>
                   </el-button>
                 </el-tooltip>
-                <el-tooltip hide-after="0" :content="t('chat.speak')" placement="top">
-                  <el-button text circle class="msg-toolbar-btn" @click="speakAssistant(docMeta(m)!.markdownBody)">
+                <el-tooltip hide-after="0" :content="speakTooltip(m.id)" placement="top">
+                  <el-button text circle class="msg-toolbar-btn" @click="speakAssistant(docMeta(m)!.markdownBody, m.id)">
                     <el-icon><Microphone /></el-icon>
                   </el-button>
                 </el-tooltip>
@@ -977,8 +1010,8 @@ function askFollowUp(q: string) {
                     </span>
                   </el-button>
                 </el-tooltip>
-                <el-tooltip hide-after="0" :content="t('chat.speak')" placement="top">
-                  <el-button text circle class="msg-toolbar-btn" @click="speakAssistant(m.content)">
+                <el-tooltip hide-after="0" :content="speakTooltip(m.id)" placement="top">
+                  <el-button text circle class="msg-toolbar-btn" @click="speakAssistant(m.content, m.id)">
                     <el-icon><Microphone /></el-icon>
                   </el-button>
                 </el-tooltip>
@@ -1797,7 +1830,7 @@ function askFollowUp(q: string) {
 }
 
 .main--embedded .composer-input :deep(.el-textarea__inner) {
-  min-height: 88px !important;
+  min-height: 38px !important;
 }
 
 .image-fab {

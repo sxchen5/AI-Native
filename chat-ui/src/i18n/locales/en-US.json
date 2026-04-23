@@ -100,6 +100,7 @@
     "resend": "Resend",
     "regenerate": "Regenerate",
     "speak": "Read aloud",
+    "speakStop": "Stop reading",
     "toCanvas": "Open as document",
     "jumpToBottom": "Scroll to bottom",
     "upload": "Upload file",
