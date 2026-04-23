@@ -1396,7 +1396,7 @@ function askFollowUp(q: string) {
   padding: 16px 25px 25px;
 }
 .main--embedded .composer {
-  padding: 10px 25px 25px;
+  padding: 0px 22px 12px 12px;
 }
 .main--embedded .composer-inner {
   max-width: 100%;
