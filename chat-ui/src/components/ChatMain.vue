@@ -986,7 +986,7 @@ function askFollowUp(q: string) {
       </div>
     </header>
 
-    <div class="main-mid" :class="{ 'main-mid--toc': showOutlinePanel }">
+    <div class="main-mid">
     <div class="scroll-layout">
     <div class="chat-column">
     <div
@@ -1423,11 +1423,6 @@ function askFollowUp(q: string) {
   position: relative;
 }
 
-/** 有 Markdown 目录时略留右侧空隙，避免正文与悬浮层完全重叠 */
-.main-mid--toc .scroll-layout {
-  padding-right: 8px;
-}
-
 .scroll-layout {
   flex: 1;
   min-height: 0;
@@ -1457,7 +1452,7 @@ function askFollowUp(q: string) {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 12px 10px 12px 14px;
-  opacity: 0.9;
+  opacity: 0.8;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   z-index: 4;
@@ -1490,24 +1485,6 @@ function askFollowUp(q: string) {
   pointer-events: none;
 }
 
-/* 下沿横线：与聊天区背景色柔和过渡 */
-.chat-md-outline::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--bg-chat-surface) 0%, transparent),
-    var(--border-subtle) 20%,
-    var(--border-subtle) 80%,
-    color-mix(in srgb, var(--bg-chat-surface) 0%, transparent)
-  );
-  pointer-events: none;
-}
-
 /* 点击目录定位后：标题闪烁两次（v-html 内须用 :deep） */
 :deep(.prose-ai.markdown-body h1.chat-md-heading-flash),
 :deep(.prose-ai.markdown-body h2.chat-md-heading-flash),
@@ -1536,6 +1513,8 @@ function askFollowUp(q: string) {
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 10px;
+  border-bottom: none;
+  box-shadow: none;
 }
 
 .chat-md-outline-head {
