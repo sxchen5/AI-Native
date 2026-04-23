@@ -1271,7 +1271,7 @@ function askFollowUp(q: string) {
   background: var(--bg-input-fill);
   color: var(--text-primary);
   font: inherit;
-  font-size: 13px;
+  font-size: 15px;
   padding: 10px 14px;
   border-radius: 999px;
   cursor: pointer;
