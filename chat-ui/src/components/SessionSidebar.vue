@@ -42,7 +42,16 @@ function resolvePresetIcon(name: string) {
   return (comp as typeof Icons.UserFilled) || Icons.UserFilled
 }
 
+function isEmptyNewSession(): boolean {
+  if (!chat.activeSessionId) return false
+  return chat.messages.length === 0
+}
+
 async function onNew() {
+  if (isEmptyNewSession()) {
+    ElMessage.info(t('session.alreadyEmpty'))
+    return
+  }
   try {
     await chat.createSession()
     await nextTick()

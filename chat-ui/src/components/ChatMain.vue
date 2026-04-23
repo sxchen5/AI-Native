@@ -395,7 +395,7 @@ function runStream(
       async onDone() {
         stopTypewriter()
         await flushStreamVisual()
-        await chat.fetchMessages(sid, { silent: true })
+        // 成功结束不再静默全量拉消息：服务端已在流末尾写入同内容，全量替换会导致整段 Markdown 重绘「闪一下」
         await chat.fetchSessions()
         syncUserEditsFromMessages()
         await scrollToBottom(true)
@@ -672,6 +672,7 @@ function askFollowUp(q: string) {
     <div
       ref="msgScrollEl"
       class="msg-scroll u-scroll"
+      :class="{ 'msg-scroll--jump': showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding }"
       @scroll.passive="onMsgScroll"
     >
       <div v-if="!chat.activeSessionId" class="landing">
@@ -904,18 +905,17 @@ function askFollowUp(q: string) {
           </div>
         </div>
         <div ref="bottomAnchor" class="anchor" />
+        <div
+          v-if="showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding"
+          class="jump-float"
+        >
+          <el-tooltip hide-after="0" :content="t('chat.jumpToBottom')" placement="top">
+            <el-button class="jump-btn" circle @click="jumpToLatest">
+              <el-icon :size="18"><ArrowDown /></el-icon>
+            </el-button>
+          </el-tooltip>
+        </div>
       </div>
-    </div>
-
-    <div
-      v-if="showJumpToBottom && chat.activeSessionId && chat.messages.length > 0 && !showLanding"
-      class="jump-strip"
-    >
-      <el-tooltip hide-after="0" :content="t('chat.jumpToBottom')" placement="top">
-        <el-button class="jump-btn" circle @click="jumpToLatest">
-          <el-icon :size="18"><ArrowDown /></el-icon>
-        </el-button>
-      </el-tooltip>
     </div>
 
     <footer class="composer">
@@ -945,7 +945,7 @@ function askFollowUp(q: string) {
         <el-input
           v-model="chat.inputDraft"
           type="textarea"
-          :autosize="{ minRows: 3, maxRows: 8 }"
+          :autosize="{ minRows: 5, maxRows: 10 }"
           resize="none"
           class="composer-input"
           :placeholder="t('chat.inputPlaceholder')"
@@ -1013,6 +1013,7 @@ function askFollowUp(q: string) {
   min-width: 0;
   min-height: 0;
   background: var(--bg-chat-surface);
+  --chat-content-max: min(940px, calc(100% - 100px));
 }
 
 /* 消息区 + 回到底部条 + 输入区：占满标题下方剩余高度 */
@@ -1132,7 +1133,7 @@ function askFollowUp(q: string) {
 }
 
 .thread-head-inner {
-  max-width: min(940px, calc(100% - 100px));
+  max-width: var(--chat-content-max, min(940px, calc(100% - 100px)));
   margin: 0 auto;
   text-align: center;
 }
@@ -1173,22 +1174,32 @@ function askFollowUp(q: string) {
   scroll-behavior: smooth;
   padding: 20px 16px 12px;
   background: var(--bg-chat-surface);
+  position: relative;
+}
+/* 为底部悬浮「回到底部」预留空间，避免遮挡最后几条消息 */
+.msg-scroll--jump {
+  padding-bottom: 56px;
 }
 
-/* 在滚动区与输入框之间占位一行，随布局流动，避免 absolute 在滚动视口内「粘住」 */
-.jump-strip {
-  flex-shrink: 0;
+.jump-float {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 10px;
   display: flex;
   justify-content: center;
-  align-items: center;
-  padding: 4px 0 6px;
+  pointer-events: none;
+  z-index: 4;
   background: transparent;
+}
+.jump-float :deep(.el-tooltip__trigger) {
+  pointer-events: auto;
 }
 
 .follow-up-inline {
   margin-top: 10px;
   width: 100%;
-  max-width: min(640px, 100%);
+  max-width: var(--chat-content-max, min(940px, calc(100% - 100px)));
 }
 
 .follow-up-inline-chips {
@@ -1379,7 +1390,7 @@ function askFollowUp(q: string) {
 }
 
 .msg-inner {
-  max-width: min(940px, calc(100% - 100px));
+  max-width: var(--chat-content-max, min(940px, calc(100% - 100px)));
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -1565,7 +1576,7 @@ function askFollowUp(q: string) {
 
 .composer-inner {
   position: relative;
-  max-width: min(940px, calc(100% - 100px));
+  max-width: var(--chat-content-max, min(940px, calc(100% - 100px)));
   margin: 0 auto;
 }
 
@@ -1615,7 +1626,7 @@ function askFollowUp(q: string) {
 .composer-input :deep(.el-textarea__inner) {
   border-radius: var(--radius-lg, 14px);
   padding: 12px 168px 12px 14px;
-  min-height: 88px !important;
+  min-height: 138px !important;
   background: var(--bg-elevated) !important;
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
@@ -1628,10 +1639,10 @@ function askFollowUp(q: string) {
   bottom: 10px;
   width: 40px;
   height: 40px;
-  border: 1px solid var(--border-subtle) !important;
+  border: none !important;
   background: var(--bg-elevated) !important;
   color: var(--text-secondary) !important;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none !important;
 }
 .mic-fab {
   position: absolute;
@@ -1639,10 +1650,10 @@ function askFollowUp(q: string) {
   bottom: 10px;
   width: 40px;
   height: 40px;
-  border: 1px solid var(--border-subtle) !important;
+  border: none !important;
   background: var(--bg-elevated) !important;
   color: var(--text-secondary) !important;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none !important;
 }
 
 .attach-fab {
@@ -1651,10 +1662,10 @@ function askFollowUp(q: string) {
   bottom: 10px;
   width: 40px;
   height: 40px;
-  border: 1px solid var(--border-subtle) !important;
+  border: none !important;
   background: var(--bg-elevated) !important;
   color: var(--text-secondary) !important;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none !important;
 }
 
 .send-fab {
