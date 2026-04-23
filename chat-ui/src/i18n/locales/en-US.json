@@ -104,6 +104,8 @@
     "toCanvas": "Open as document",
     "jumpToBottom": "Scroll to bottom",
     "mdOutline": "On-page headings",
+    "mdOutlineClose": "Close outline",
+    "mdOutlineShow": "Show outline",
     "upload": "Upload file",
     "uploadImage": "Upload image",
     "uploading": "Extracting text…",

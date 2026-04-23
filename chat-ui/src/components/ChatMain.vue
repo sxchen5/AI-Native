@@ -3,6 +3,7 @@ import {
   ArrowDown,
   CircleClose,
   Close,
+  DArrowLeft,
   Download,
   Edit,
   EditPen,
@@ -48,6 +49,8 @@ const msgScrollEl = ref<HTMLElement | null>(null)
 /** 当前用于右侧 Markdown 目录的助手消息 id（按滚动区域可见度选取） */
 const activeOutlineMessageId = ref<string | null>(null)
 let outlineScrollRaf = 0
+/** 右侧 Markdown 目录面板是否展开（可手动关闭，有关闭条时再显示） */
+const outlinePanelVisible = ref(true)
 const showJumpToBottom = ref(false)
 let scrollThumbTimer: ReturnType<typeof setTimeout> | null = null
 const userEdits = reactive<Record<string, string>>({})
@@ -247,6 +250,7 @@ watch(
     editingUserId.value = null
     followUpQuestions.value = []
     activeOutlineMessageId.value = null
+    outlinePanelVisible.value = true
     void scrollToBottom(false)
     void nextTick(() => updateScrollBottomState())
   },
@@ -753,6 +757,13 @@ const outlineItems = computed<ChatHeadingTocItem[]>(() => {
   return assistantOutlineByMessageId.value.get(id) ?? []
 })
 
+const hasOutlineContent = computed(() => !props.hideThreadHead && outlineItems.value.length > 0)
+const showOutlinePanel = computed(() => hasOutlineContent.value && outlinePanelVisible.value)
+
+watch(hasOutlineContent, (v, prev) => {
+  if (v && !prev) outlinePanelVisible.value = true
+})
+
 function flashHeading(el: HTMLElement) {
   el.classList.remove('chat-md-heading-flash')
   void el.offsetWidth
@@ -947,7 +958,7 @@ function askFollowUp(q: string) {
       </div>
     </header>
 
-    <div class="main-mid" :class="{ 'main-mid--toc': !props.hideThreadHead && outlineItems.length > 0 }">
+    <div class="main-mid" :class="{ 'main-mid--toc': showOutlinePanel }">
     <div class="scroll-layout">
     <div class="chat-column">
     <div
@@ -1304,11 +1315,18 @@ function askFollowUp(q: string) {
     </div>
 
     <aside
-      v-if="!props.hideThreadHead && outlineItems.length > 0"
+      v-if="showOutlinePanel"
       class="chat-md-outline u-scroll"
       aria-label="markdown outline"
     >
-      <div class="chat-md-outline-head">{{ t('chat.mdOutline') }}</div>
+      <div class="chat-md-outline-head-row">
+        <span class="chat-md-outline-head">{{ t('chat.mdOutline') }}</span>
+        <el-tooltip hide-after="0" :content="t('chat.mdOutlineClose')" placement="left">
+          <button type="button" class="chat-md-outline-close" :aria-label="t('chat.mdOutlineClose')" @click="outlinePanelVisible = false">
+            <el-icon :size="14"><Close /></el-icon>
+          </button>
+        </el-tooltip>
+      </div>
       <nav class="chat-md-outline-nav">
         <button
           v-for="it in outlineItems"
@@ -1322,6 +1340,16 @@ function askFollowUp(q: string) {
         </button>
       </nav>
     </aside>
+
+    <button
+      v-if="hasOutlineContent && !showOutlinePanel"
+      type="button"
+      class="chat-md-outline-reopen"
+      :aria-label="t('chat.mdOutlineShow')"
+      @click="outlinePanelVisible = true"
+    >
+      <el-icon :size="14"><DArrowLeft /></el-icon>
+    </button>
     </div>
   </main>
 </template>
@@ -1405,7 +1433,7 @@ function askFollowUp(q: string) {
   padding: 12px 10px 12px 14px;
   border-left: 1px solid var(--border-subtle);
   background: var(--bg-chat-surface);
-  opacity: 0.98;
+  opacity: 0.9;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   box-shadow: -8px 0 28px rgba(15, 23, 42, 0.08);
@@ -1430,13 +1458,67 @@ function askFollowUp(q: string) {
   }
 }
 
+.chat-md-outline-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
 .chat-md-outline-head {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-muted);
-  margin-bottom: 10px;
+  min-width: 0;
+}
+
+.chat-md-outline-close {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.chat-md-outline-close:hover {
+  background: var(--bg-input-fill);
+  color: var(--text-primary);
+}
+
+.chat-md-outline-reopen {
+  position: absolute;
+  top: 12px;
+  right: 0;
+  z-index: 5;
+  width: 28px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  background: var(--bg-chat-surface);
+  opacity: 0.9;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  box-shadow: -4px 0 16px rgba(15, 23, 42, 0.08);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.chat-md-outline-reopen:hover {
+  background: var(--bg-input-fill);
+  color: var(--text-primary);
 }
 
 .chat-md-outline-nav {
