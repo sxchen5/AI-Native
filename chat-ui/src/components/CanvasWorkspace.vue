@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   Close,
-  CopyDocument,
   DArrowLeft,
   DArrowRight,
   Document,
@@ -15,6 +14,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import ChatWorkspace from './ChatWorkspace.vue'
+import IconCopyLayers from './icons/IconCopyLayers.vue'
 import * as chatApi from '../api/chatApi'
 import { useChatStore } from '../stores/chat'
 import { useUiStore } from '../stores/ui'
@@ -234,8 +234,8 @@ watch(
         <div class="doc-toolbar-right">
           <template v-if="messageId">
             <el-tooltip :content="t('canvas.copy')" placement="bottom">
-              <el-button text circle @click="copyDoc">
-                <el-icon><CopyDocument /></el-icon>
+              <el-button text circle class="canvas-toolbar-btn" @click="copyDoc">
+                <span class="canvas-toolbar-copy-ic"><IconCopyLayers /></span>
               </el-button>
             </el-tooltip>
             <el-tooltip :content="t('canvas.download')" placement="bottom">
@@ -419,6 +419,19 @@ watch(
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
+}
+
+.canvas-toolbar-copy-ic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+  color: #68748b;
+}
+.canvas-toolbar-btn:hover .canvas-toolbar-copy-ic {
+  color: var(--text-primary);
 }
 
 .toolbar-divider {

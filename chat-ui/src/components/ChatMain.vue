@@ -3,7 +3,6 @@ import {
   ArrowDown,
   CircleClose,
   Close,
-  DocumentCopy,
   Download,
   Edit,
   EditPen,
@@ -26,6 +25,7 @@ import type { ChatMessage, DocumentCardMeta } from '../api/types'
 import { useChatStore } from '../stores/chat'
 import { renderAiMarkdown } from '../utils/markdown'
 import { markdownToPlainText } from '../utils/plainText'
+import IconCopyLayers from './icons/IconCopyLayers.vue'
 import IconThumbDown from './icons/IconThumbDown.vue'
 import IconThumbUp from './icons/IconThumbUp.vue'
 import { parseDocumentMeta } from '../utils/documentMeta'
@@ -891,7 +891,7 @@ function askFollowUp(q: string) {
                   </el-tooltip>
                   <el-tooltip hide-after="0" :content="t('chat.copy')" placement="top">
                     <el-button text circle class="msg-toolbar-btn" @click="copyText(userEdits[m.id] || '')">
-                      <el-icon><DocumentCopy /></el-icon>
+                      <span class="msg-toolbar-copy-ic"><IconCopyLayers /></span>
                     </el-button>
                   </el-tooltip>
                   <el-tooltip hide-after="0" :content="t('chat.resend')" placement="top">
@@ -910,7 +910,7 @@ function askFollowUp(q: string) {
                 <template v-else>
                   <el-tooltip hide-after="0" :content="t('chat.copy')" placement="top">
                     <el-button text circle class="msg-toolbar-btn" @click="copyText(userEdits[m.id] || '')">
-                      <el-icon><DocumentCopy /></el-icon>
+                      <span class="msg-toolbar-copy-ic"><IconCopyLayers /></span>
                     </el-button>
                   </el-tooltip>
                   <el-tooltip hide-after="0" :content="t('chat.edit')" placement="top">
@@ -951,7 +951,7 @@ function askFollowUp(q: string) {
               <div class="ai-toolbar" :class="{ 'ai-toolbar--visible': showAiToolbar(idx, m) }">
                 <el-tooltip hide-after="0" :content="t('chat.copy')" placement="top">
                   <el-button text circle class="msg-toolbar-btn" @click="copyText(docMeta(m)!.markdownBody)">
-                    <el-icon><DocumentCopy /></el-icon>
+                    <span class="msg-toolbar-copy-ic"><IconCopyLayers /></span>
                   </el-button>
                 </el-tooltip>
                 <el-tooltip hide-after="0" :content="t('chat.downloadDoc')" placement="top">
@@ -981,7 +981,7 @@ function askFollowUp(q: string) {
               <div class="ai-toolbar" :class="{ 'ai-toolbar--visible': showAiToolbar(idx, m) }">
                 <el-tooltip hide-after="0" :content="t('chat.copy')" placement="top">
                   <el-button text circle class="msg-toolbar-btn" @click="copyText(m.content)">
-                    <el-icon><DocumentCopy /></el-icon>
+                    <span class="msg-toolbar-copy-ic"><IconCopyLayers /></span>
                   </el-button>
                 </el-tooltip>
                 <el-tooltip hide-after="0" :content="t('chat.like')" placement="top">
@@ -1907,5 +1907,16 @@ function askFollowUp(q: string) {
 }
 .msg-toolbar-btn :deep(.el-icon) {
   font-size: 16px;
+}
+.msg-toolbar-copy-ic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: #68748b;
+}
+.msg-toolbar-btn:hover .msg-toolbar-copy-ic {
+  color: var(--text-primary);
 }
 </style>
