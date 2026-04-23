@@ -787,6 +787,15 @@ function flashHeading(el: HTMLElement) {
   window.setTimeout(() => el.classList.remove('chat-md-heading-flash'), 900)
 }
 
+function findHeadingInBubble(body: Element, it: ChatHeadingTocItem): HTMLElement | null {
+  const byId = body.querySelector(`#${CSS.escape(it.id)}`) as HTMLElement | null
+  if (byId) return byId
+  const list = Array.from(body.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6'))
+  const byIndex = list[it.headingIndex]
+  if (byIndex) return byIndex
+  return list.find((h) => h.id === it.id) ?? null
+}
+
 async function scrollToHeading(it: ChatHeadingTocItem) {
   await nextTick()
   const scrollEl = msgScrollEl.value
@@ -798,22 +807,24 @@ async function scrollToHeading(it: ChatHeadingTocItem) {
           (r) => r.dataset.messageId === mid,
         ) ?? null)
       : null
-  const scope: Element | DocumentFragment = row?.querySelector('.prose-ai.markdown-body') ?? scrollEl
-  const el = scope.querySelector(`#${CSS.escape(it.id)}`) as HTMLElement | null
+  const body = row?.querySelector('.prose-ai.markdown-body') ?? null
+  if (!body) return
+  const el = findHeadingInBubble(body, it)
   if (!el) return
+  /** 与画布预览一致：先让标题进入视口，再在滚动容器内微调并闪烁 */
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
   const pad = 12
-  const maxTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight)
-  const targetTop = () => {
-    const st = scrollEl.getBoundingClientRect().top
-    const et = el.getBoundingClientRect().top
-    return scrollEl.scrollTop + (et - st) - pad
-  }
-  const top = Math.max(0, Math.min(targetTop(), maxTop))
-  scrollEl.scrollTop = top
-  requestAnimationFrame(() => {
-    scrollEl.scrollTop = Math.max(0, Math.min(targetTop(), maxTop))
+  const snapAndFlash = () => {
+    const maxTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight)
+    const top =
+      scrollEl.scrollTop +
+      (el.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top) -
+      pad
+    scrollEl.scrollTop = Math.max(0, Math.min(top, maxTop))
     flashHeading(el)
-  })
+  }
+  window.setTimeout(snapAndFlash, 320)
+  window.setTimeout(snapAndFlash, 720)
 }
 
 function updateActiveOutlineFromScroll() {

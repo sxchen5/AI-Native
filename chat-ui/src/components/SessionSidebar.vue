@@ -12,7 +12,7 @@ import {
   Sunny,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -37,6 +37,27 @@ const theme = useThemeStore()
 const profile = useProfileStore()
 
 const histScrollEl = ref<HTMLElement | null>(null)
+/** 历史标题是否被省略，仅此时显示完整标题 tooltip */
+const sessionTitleTruncated = reactive<Record<string, boolean>>({})
+const sessionTitleResizeObservers = new Map<string, ResizeObserver>()
+
+function bindSessionTitleEl(sessionId: string, el: unknown) {
+  const prev = sessionTitleResizeObservers.get(sessionId)
+  prev?.disconnect()
+  sessionTitleResizeObservers.delete(sessionId)
+  delete sessionTitleTruncated[sessionId]
+
+  const node = el as HTMLElement | null
+  if (!node) return
+
+  const update = () => {
+    sessionTitleTruncated[sessionId] = node.scrollWidth > node.clientWidth + 1
+  }
+  const ro = new ResizeObserver(() => update())
+  ro.observe(node)
+  sessionTitleResizeObservers.set(sessionId, ro)
+  void nextTick(() => update())
+}
 
 const userAvatarIcon = computed(() => resolvePresetIcon(profile.currentAvatar.iconName))
 
@@ -127,6 +148,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onWinKey)
+  for (const ro of sessionTitleResizeObservers.values()) {
+    ro.disconnect()
+  }
+  sessionTitleResizeObservers.clear()
 })
 
 async function onLogout() {
@@ -185,18 +210,27 @@ async function onLogout() {
         <div v-if="chat.loadingSessions" class="muted pad">{{ t('session.loading') }}</div>
         <div v-else-if="chat.sessions.length === 0" class="muted pad">{{ t('session.empty') }}</div>
         <div v-else class="list">
-          <div
+          <el-tooltip
             v-for="s in chat.sessions"
             :key="s.id"
-            class="item"
-            :class="{ active: s.id === chat.activeSessionId }"
-            @click="onSelect(s)"
+            hide-after="0"
+            placement="right"
+            :disabled="!sessionTitleTruncated[s.id]"
+            :content="s.title"
           >
+            <div
+              class="item"
+              :class="{ active: s.id === chat.activeSessionId }"
+              @click="onSelect(s)"
+            >
             <span class="item-msg-icon" aria-hidden="true">
               <IconSessionBubble class="item-msg-svg" />
             </span>
             <div class="item-main">
-              <span class="item-title">{{ s.title }}</span>
+              <span
+                :ref="(el) => bindSessionTitleEl(s.id, el)"
+                class="item-title"
+              >{{ s.title }}</span>
             </div>
             <el-dropdown trigger="click" @command="(cmd: string) => (cmd === 'rename' ? onRename(s) : onDelete(s))">
               <el-button text class="more" @click.stop>
@@ -215,7 +249,8 @@ async function onLogout() {
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
-          </div>
+            </div>
+          </el-tooltip>
           <div v-if="chat.loadingMoreSessions" class="muted load-more">{{ t('session.loadingMore') }}</div>
         </div>
       </div>
@@ -392,7 +427,7 @@ async function onLogout() {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px;
+  padding: 10px;
   margin-top: 10px;
   margin-bottom: 10px;
   border-radius: 12px;
@@ -475,7 +510,7 @@ html.dark .new-chat-pill {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 10px 7px 8px;
+  padding: 4px;
   border-radius: 12px;
   border: none;
   background: transparent;
