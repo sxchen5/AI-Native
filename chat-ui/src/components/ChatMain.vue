@@ -1319,10 +1319,10 @@ function askFollowUp(q: string) {
   padding-right: 10px;
 }
 .main--embedded .msg-scroll {
-  padding: 16px 10px 10px;
+  padding: 16px 25px 25px;
 }
 .main--embedded .composer {
-  padding: 10px 10px 12px;
+  padding: 10px 25px 25px;
 }
 .main--embedded .composer-inner {
   max-width: 100%;

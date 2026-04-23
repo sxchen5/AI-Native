@@ -355,8 +355,7 @@ watch(
 }
 
 .canvas-resizer {
-  flex: 0 0 6px;
-  width: 6px;
+  width: 4px;
   cursor: col-resize;
   background: transparent;
   position: relative;
