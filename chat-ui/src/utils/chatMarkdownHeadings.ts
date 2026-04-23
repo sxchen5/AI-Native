@@ -53,7 +53,7 @@ export function chatHeadingPlainText(tokens: Token[]): string {
   return out.trim() || '标题'
 }
 
-export type ChatHeadingTocItem = { depth: number; text: string; id: string }
+export type ChatHeadingTocItem = { depth: number; text: string; id: string; messageId: string }
 
 /**
  * 从 AI 回复 Markdown 中提取 h1–h6 目录项；id 与 {@link renderAiMarkdown} 带相同 {@code messageId} 前缀时一致。
@@ -61,7 +61,8 @@ export type ChatHeadingTocItem = { depth: number; text: string; id: string }
 export function extractChatMarkdownHeadingToc(markdown: string, messageId?: string): ChatHeadingTocItem[] {
   const md = (markdown || '').trim()
   if (!md) return []
-  const prefix = messageId ? `${sanitizeMessageIdForHeadingPrefix(messageId)}-` : ''
+  const mid = messageId ?? ''
+  const prefix = mid ? `${sanitizeMessageIdForHeadingPrefix(mid)}-` : ''
   const tokens = LEXER_MARKED.lexer(md) as Token[]
   const used = new Set<string>()
   const out: ChatHeadingTocItem[] = []
@@ -71,7 +72,7 @@ export function extractChatMarkdownHeadingToc(markdown: string, messageId?: stri
     const depth = Math.min(6, Math.max(1, h.depth))
     const plain = chatHeadingPlainText(h.tokens)
     const id = prefix + slugifyChatHeadingId(plain, used)
-    out.push({ depth, text: plain, id })
+    out.push({ depth, text: plain, id, messageId: mid })
   }
   return out
 }

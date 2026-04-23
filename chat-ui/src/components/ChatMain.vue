@@ -787,11 +787,19 @@ function flashHeading(el: HTMLElement) {
   window.setTimeout(() => el.classList.remove('chat-md-heading-flash'), 900)
 }
 
-async function scrollToHeading(anchorId: string) {
+async function scrollToHeading(it: ChatHeadingTocItem) {
   await nextTick()
   const scrollEl = msgScrollEl.value
   if (!scrollEl) return
-  const el = scrollEl.querySelector(`#${CSS.escape(anchorId)}`) as HTMLElement | null
+  const mid = it.messageId
+  const row =
+    mid && mid.length > 0
+      ? (Array.from(scrollEl.querySelectorAll<HTMLElement>('.row[data-message-id]')).find(
+          (r) => r.dataset.messageId === mid,
+        ) ?? null)
+      : null
+  const scope: Element | DocumentFragment = row?.querySelector('.prose-ai.markdown-body') ?? scrollEl
+  const el = scope.querySelector(`#${CSS.escape(it.id)}`) as HTMLElement | null
   if (!el) return
   const pad = 12
   const maxTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight)
@@ -800,19 +808,12 @@ async function scrollToHeading(anchorId: string) {
     const et = el.getBoundingClientRect().top
     return scrollEl.scrollTop + (et - st) - pad
   }
-  scrollEl.scrollTo({
-    top: Math.max(0, Math.min(targetTop(), maxTop)),
-    behavior: 'smooth',
-  })
-  /** smooth 滚动结束后再校正一次并闪烁（避免未滚到位） */
-  const runFlash = () => {
-    scrollEl.scrollTo({
-      top: Math.max(0, Math.min(targetTop(), maxTop)),
-      behavior: 'auto',
-    })
+  const top = Math.max(0, Math.min(targetTop(), maxTop))
+  scrollEl.scrollTop = top
+  requestAnimationFrame(() => {
+    scrollEl.scrollTop = Math.max(0, Math.min(targetTop(), maxTop))
     flashHeading(el)
-  }
-  window.setTimeout(runFlash, 480)
+  })
 }
 
 function updateActiveOutlineFromScroll() {
@@ -1350,7 +1351,7 @@ function askFollowUp(q: string) {
           type="button"
           class="chat-md-outline-link"
           :class="`depth-${it.depth}`"
-          @click="scrollToHeading(it.id)"
+          @click="scrollToHeading(it)"
         >
           {{ it.text }}
         </button>
@@ -1441,24 +1442,70 @@ function askFollowUp(q: string) {
   position: absolute;
   top: 0;
   right: 0;
-  bottom: 0;
+  bottom: 200px;
   width: 200px;
-  max-height: 100%;
+  max-height: none;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 12px 10px 12px 14px;
-  border-left: 1px solid var(--border-subtle);
-  background: var(--bg-chat-surface);
   opacity: 0.9;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: -8px 0 28px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   z-index: 4;
   pointer-events: auto;
+  /* 上→下与聊天背景融合 */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-chat-surface) 45%, transparent) 0%,
+    color-mix(in srgb, var(--bg-chat-surface) 82%, transparent) 42%,
+    var(--bg-chat-surface) 100%
+  );
+  box-shadow: -10px 0 36px color-mix(in srgb, var(--bg-chat-surface) 35%, transparent);
+}
+
+/* 左侧竖线：自上而下渐隐，与背景衔接 */
+.chat-md-outline::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-chat-surface) 0%, transparent) 0%,
+    var(--border-subtle) 28%,
+    var(--border-subtle) 72%,
+    color-mix(in srgb, var(--bg-chat-surface) 0%, transparent) 100%
+  );
+  pointer-events: none;
+}
+
+/* 下沿横线：与聊天区背景色柔和过渡 */
+.chat-md-outline::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--bg-chat-surface) 0%, transparent),
+    var(--border-subtle) 20%,
+    var(--border-subtle) 80%,
+    color-mix(in srgb, var(--bg-chat-surface) 0%, transparent)
+  );
+  pointer-events: none;
 }
 
 /* 点击目录定位后：标题闪烁两次（v-html 内须用 :deep） */
-:deep(.prose-ai.markdown-body .chat-md-heading-flash) {
+:deep(.prose-ai.markdown-body h1.chat-md-heading-flash),
+:deep(.prose-ai.markdown-body h2.chat-md-heading-flash),
+:deep(.prose-ai.markdown-body h3.chat-md-heading-flash),
+:deep(.prose-ai.markdown-body h4.chat-md-heading-flash),
+:deep(.prose-ai.markdown-body h5.chat-md-heading-flash),
+:deep(.prose-ai.markdown-body h6.chat-md-heading-flash) {
   animation: chat-md-heading-flash 0.28s ease-in-out 2;
   border-radius: 4px;
 }
