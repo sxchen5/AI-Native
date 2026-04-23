@@ -755,10 +755,17 @@ const outlineItems = computed<ChatHeadingTocItem[]>(() => {
 
 async function scrollToHeading(anchorId: string) {
   await nextTick()
-  const root = msgScrollEl.value
-  if (!root) return
-  const el = root.querySelector(`#${CSS.escape(anchorId)}`) as HTMLElement | null
-  el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const scrollEl = msgScrollEl.value
+  if (!scrollEl) return
+  const el = scrollEl.querySelector(`#${CSS.escape(anchorId)}`) as HTMLElement | null
+  if (!el) return
+  const pad = 10
+  const relTop = el.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop
+  const maxTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight)
+  scrollEl.scrollTo({
+    top: Math.max(0, Math.min(relTop - pad, maxTop)),
+    behavior: 'smooth',
+  })
 }
 
 function updateActiveOutlineFromScroll() {
@@ -925,6 +932,7 @@ function askFollowUp(q: string) {
       class="scroll-layout"
       :class="{ 'scroll-layout--outline': !props.hideThreadHead && outlineItems.length > 0 }"
     >
+    <div class="chat-column">
     <div
       ref="msgScrollEl"
       class="msg-scroll u-scroll"
@@ -1173,27 +1181,6 @@ function askFollowUp(q: string) {
       </div>
     </div>
 
-    <aside
-      v-if="!props.hideThreadHead && outlineItems.length > 0"
-      class="chat-md-outline u-scroll"
-      aria-label="markdown outline"
-    >
-      <div class="chat-md-outline-head">{{ t('chat.mdOutline') }}</div>
-      <nav class="chat-md-outline-nav">
-        <button
-          v-for="it in outlineItems"
-          :key="it.id"
-          type="button"
-          class="chat-md-outline-link"
-          :class="`depth-${it.depth}`"
-          @click="scrollToHeading(it.id)"
-        >
-          {{ it.text }}
-        </button>
-      </nav>
-    </aside>
-    </div>
-
     <footer
       class="composer"
       :class="{
@@ -1297,6 +1284,28 @@ function askFollowUp(q: string) {
       </div>
     </footer>
     </div>
+
+    <aside
+      v-if="!props.hideThreadHead && outlineItems.length > 0"
+      class="chat-md-outline u-scroll"
+      aria-label="markdown outline"
+    >
+      <div class="chat-md-outline-head">{{ t('chat.mdOutline') }}</div>
+      <nav class="chat-md-outline-nav">
+        <button
+          v-for="it in outlineItems"
+          :key="it.id"
+          type="button"
+          class="chat-md-outline-link"
+          :class="`depth-${it.depth}`"
+          @click="scrollToHeading(it.id)"
+        >
+          {{ it.text }}
+        </button>
+      </nav>
+    </aside>
+    </div>
+    </div>
   </main>
 </template>
 
@@ -1351,8 +1360,16 @@ function askFollowUp(q: string) {
   min-width: 0;
 }
 
-.scroll-layout--outline .msg-scroll {
-  flex: 1;
+/* 消息列表 + 输入框同一列，与右侧目录并排时宽度一致，避免输入区比消息区宽 */
+.chat-column {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.scroll-layout--outline .chat-column {
   min-width: 0;
 }
 
