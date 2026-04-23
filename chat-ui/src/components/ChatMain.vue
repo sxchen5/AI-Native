@@ -9,6 +9,7 @@ import {
   EditPen,
   Loading,
   Microphone,
+  VideoPause,
   Paperclip,
   Picture,
   Promotion,
@@ -965,7 +966,8 @@ function askFollowUp(q: string) {
                 </el-tooltip>
                 <el-tooltip hide-after="0" :content="speakTooltip(m.id)" placement="top">
                   <el-button text circle class="msg-toolbar-btn" @click="speakAssistant(docMeta(m)!.markdownBody, m.id)">
-                    <el-icon><Microphone /></el-icon>
+                    <el-icon v-if="isTtsBusyForMessage(m.id)"><VideoPause /></el-icon>
+                    <el-icon v-else><Microphone /></el-icon>
                   </el-button>
                 </el-tooltip>
               </div>
@@ -991,7 +993,7 @@ function askFollowUp(q: string) {
                     :disabled="chat.sending"
                     @click="toggleFeedback(m, 'up')"
                   >
-                    <span class="thumb-wrap" :class="{ muted: feedbackVote(m) !== 'up' }">
+                    <span class="thumb-wrap" :class="{ 'thumb-wrap--on': feedbackVote(m) === 'up' }">
                       <IconThumbUp />
                     </span>
                   </el-button>
@@ -1005,14 +1007,15 @@ function askFollowUp(q: string) {
                     :disabled="chat.sending"
                     @click="toggleFeedback(m, 'down')"
                   >
-                    <span class="thumb-wrap" :class="{ muted: feedbackVote(m) !== 'down' }">
+                    <span class="thumb-wrap" :class="{ 'thumb-wrap--on': feedbackVote(m) === 'down' }">
                       <IconThumbDown />
                     </span>
                   </el-button>
                 </el-tooltip>
                 <el-tooltip hide-after="0" :content="speakTooltip(m.id)" placement="top">
                   <el-button text circle class="msg-toolbar-btn" @click="speakAssistant(m.content, m.id)">
-                    <el-icon><Microphone /></el-icon>
+                    <el-icon v-if="isTtsBusyForMessage(m.id)"><VideoPause /></el-icon>
+                    <el-icon v-else><Microphone /></el-icon>
                   </el-button>
                 </el-tooltip>
                 <el-tooltip hide-after="0" :content="t('chat.toCanvas')" placement="top">
@@ -1676,10 +1679,10 @@ function askFollowUp(q: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: currentColor;
+  color: #68748b;
 }
-.thumb-wrap.muted {
-  opacity: 0.42;
+.thumb-wrap.thumb-wrap--on {
+  color: currentColor;
 }
 
 .typing {
