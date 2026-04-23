@@ -1310,6 +1310,30 @@ function askFollowUp(q: string) {
   --chat-content-max: min(890px, calc(100% - 150px));
 }
 
+/* 画布分屏内嵌：左右留白收紧，内容区占满可用宽度 */
+.main--embedded {
+  --chat-content-max: 100%;
+}
+.main--embedded .embed-bar {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.main--embedded .msg-scroll {
+  padding: 16px 10px 10px;
+}
+.main--embedded .composer {
+  padding: 10px 10px 12px;
+}
+.main--embedded .composer-inner {
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+}
+.main--embedded .msg-inner,
+.main--embedded .follow-up-inline {
+  max-width: 100%;
+}
+
 /* 消息区 + 回到底部条 + 输入区：占满标题下方剩余高度 */
 .main-mid {
   flex: 1;
@@ -1635,7 +1659,6 @@ function askFollowUp(q: string) {
 
 .doc-card-wrap {
   width: 100%;
-  max-width: var(--chat-content-max, min(890px, calc(100% - 150px)));
 }
 
 .doc-card {
@@ -2056,7 +2079,10 @@ function askFollowUp(q: string) {
 }
 
 .main--embedded .composer-input :deep(.el-textarea__inner) {
-  min-height: 38px !important;
+  height: 120px !important;
+  min-height: 120px !important;
+  max-height: 120px !important;
+  resize: none;
 }
 
 .image-fab {
