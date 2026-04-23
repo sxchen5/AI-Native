@@ -1241,7 +1241,6 @@ function askFollowUp(q: string) {
   flex-wrap: wrap;
   justify-content: center;
   gap: 10px;
-  max-width: 640px;
 }
 
 .landing-suggest-loading {
