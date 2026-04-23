@@ -377,7 +377,7 @@ async function onLogout() {
 
 .brand-name {
   font-weight: 700;
-  font-size: 10px;
+  font-size: 18px;
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
