@@ -547,7 +547,21 @@ function runStream(
   }
   streamTargetMessageId = assistantPlaceholder.id
   followUpQuestions.value = []
-  chat.messages = [...chat.messages, assistantPlaceholder]
+  const appendAfter = appendAfterUserMessageId != null && appendAfterUserMessageId !== ''
+  let nextMsgs = [...chat.messages]
+  if (appendAfter) {
+    const localUserId = `local-user-${Date.now()}`
+    nextMsgs.push({
+      id: localUserId,
+      role: 'USER',
+      content: userText,
+      createdAt: new Date().toISOString(),
+      metadata: null,
+    })
+    userEdits[localUserId] = userText
+  }
+  nextMsgs.push(assistantPlaceholder)
+  chat.messages = nextMsgs
 
   return chat
     .sendStream(sid, userText, {
@@ -570,7 +584,9 @@ function runStream(
       async onDone() {
         stopTypewriter()
         await flushStreamVisual()
-        // 成功结束不再静默全量拉消息：服务端已在流末尾写入同内容，全量替换会导致整段 Markdown 重绘「闪一下」
+        if (appendAfter) {
+          await chat.fetchMessages(sid, { silent: true })
+        }
         await chat.fetchSessions()
         syncUserEditsFromMessages()
         await scrollToBottom(true)
