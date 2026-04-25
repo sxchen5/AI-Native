@@ -8,6 +8,7 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import App from './App.vue'
 import { i18n } from './i18n'
 import { router } from './router'
+import { installChatCodeBlockDelegate } from './utils/chatCodeBlockDelegate'
 import './styles/theme.css'
 import 'github-markdown-css/github-markdown.css'
 import './styles/chat-code-blocks.css'
@@ -23,4 +24,5 @@ app.use(createPinia())
 app.use(router)
 app.use(i18n)
 app.use(ElementPlus)
+installChatCodeBlockDelegate()
 app.mount('#app')

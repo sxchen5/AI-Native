@@ -21,6 +21,8 @@ import type { Token, Tokens } from 'marked'
 import { Marked, Renderer } from 'marked'
 
 import { chatHeadingPlainText, sanitizeMessageIdForHeadingPrefix, slugifyChatHeadingId } from './chatMarkdownHeadings'
+import { inferLangFromCode } from './chatCodeInfer'
+import { i18n } from '../i18n'
 
 import 'highlight.js/styles/github.css'
 
@@ -148,7 +150,21 @@ class AiRenderer extends Renderer {
       highlighted = escapeHtml(text)
     }
     const safeLang = escapeHtml(language)
-    return `<pre><code class="hljs language-${safeLang}">${highlighted}</code></pre>`
+    const displayLang = escapeHtml(inferLangFromCode(text, language))
+    const collapse = escapeHtml(i18n.global.t('chat.collapseCode') as string)
+    const copyLabel = escapeHtml(i18n.global.t('chat.copyCode') as string)
+    return `<div class="chat-code-block" data-lang="${displayLang}">
+<div class="chat-code-toolbar">
+<div class="chat-code-toolbar-left">
+<span class="chat-code-lang">${displayLang}</span>
+<button type="button" class="chat-code-toggle" aria-expanded="true">${collapse}</button>
+</div>
+<button type="button" class="chat-code-copy" aria-label="${copyLabel}">${copyLabel}</button>
+</div>
+<div class="chat-code-body">
+<pre><code class="hljs language-${safeLang}">${highlighted}</code></pre>
+</div>
+</div>`
   }
 }
 
@@ -160,7 +176,8 @@ const marked = new Marked({
 
 const PURIFY_OPTS = {
   USE_PROFILES: { html: true },
-  ADD_ATTR: ['align', 'id'],
+  ADD_ATTR: ['align', 'id', 'aria-expanded', 'aria-label', 'type', 'data-lang'],
+  ADD_TAGS: ['button'],
 }
 
 /**

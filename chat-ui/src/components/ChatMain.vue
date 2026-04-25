@@ -34,7 +34,6 @@ import { useRouter } from 'vue-router'
 import * as chatApi from '../api/chatApi'
 import type { ChatMessage, DocumentCardMeta } from '../api/types'
 import { useChatStore } from '../stores/chat'
-import { enhanceMarkdownCodeBlocks } from '../utils/chatCodeBlocks'
 import { extractChatMarkdownHeadingToc, type ChatHeadingTocItem } from '../utils/chatMarkdownHeadings'
 import { renderAiMarkdown } from '../utils/markdown'
 import { markdownToPlainText } from '../utils/plainText'
@@ -49,6 +48,12 @@ import { parseUserBubbleFromMetadata } from '../utils/modelContext'
 const { t, locale } = useI18n()
 const router = useRouter()
 const chat = useChatStore()
+
+/** SSE 已结束但打字机仍在追赶缓冲时为 true；与 chat.sending 一起表示「助手回复尚未完全展示」 */
+const streamAnimating = ref(false)
+const assistantReplyBusy = computed(() => chat.sending || streamAnimating.value)
+/** 为 true 时消息更新自动滚到底部；用户向上滚动离开底部附近后设为 false，避免无法回看 */
+const scrollStickToEnd = ref(true)
 
 const props = defineProps<{
   /** 内嵌在画布分屏左侧时隐藏会话标题区 */
@@ -152,7 +157,7 @@ function isAssistantStreaming(m: ChatMessage) {
 
 function showUserToolbar(idx: number, m: ChatMessage) {
   if (m.role !== 'USER') return false
-  if (chat.sending && isLastMessage(idx)) return false
+  if (assistantReplyBusy.value && isLastMessage(idx)) return false
   if (editingUserId.value === m.id) return true
   return isLastMessage(idx) || !!hoveringRow[m.id]
 }
@@ -160,6 +165,7 @@ function showUserToolbar(idx: number, m: ChatMessage) {
 function showAiToolbar(idx: number, m: ChatMessage) {
   if (m.role !== 'ASSISTANT') return false
   if (isAssistantStreaming(m)) return false
+  if (assistantReplyBusy.value && isLastMessage(idx)) return false
   return isLastMessage(idx) || !!hoveringRow[m.id]
 }
 
@@ -167,7 +173,7 @@ function showInlineFollowUps(idx: number, m: ChatMessage) {
   if (props.hideThreadHead) return false
   if (!chat.activeSessionId || chat.loadingMessages || showLanding.value) return false
   if (m.role !== 'ASSISTANT' || docMeta(m)) return false
-  if (!isLastMessage(idx) || chat.sending) return false
+  if (!isLastMessage(idx) || assistantReplyBusy.value) return false
   return followUpQuestions.value.length > 0
 }
 
@@ -181,6 +187,10 @@ function syncUserEditsFromMessages() {
       userEdits[m.id] = m.content
     }
   }
+}
+
+function isScrollNearBottom(el: HTMLElement, gap = 100) {
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= gap
 }
 
 async function scrollToBottom(smooth = true) {
@@ -200,9 +210,12 @@ function updateScrollBottomState() {
 }
 
 function onMsgScroll() {
+  const el = msgScrollEl.value
+  if (el && !isScrollNearBottom(el)) {
+    scrollStickToEnd.value = false
+  }
   updateScrollBottomState()
   updateActiveOutlineFromScroll()
-  const el = msgScrollEl.value
   if (!el) return
   el.classList.add('u-scroll--active')
   if (scrollThumbTimer) clearTimeout(scrollThumbTimer)
@@ -213,6 +226,7 @@ function onMsgScroll() {
 }
 
 function jumpToLatest() {
+  scrollStickToEnd.value = true
   void scrollToBottom(true)
 }
 
@@ -257,7 +271,9 @@ watch(
   () => chat.messages,
   () => {
     syncUserEditsFromMessages()
-    void scrollToBottom(true)
+    if (scrollStickToEnd.value) {
+      void scrollToBottom(true)
+    }
     void nextTick(() => {
       updateScrollBottomState()
       updateActiveOutlineFromScroll()
@@ -269,6 +285,7 @@ watch(
 watch(
   () => chat.activeSessionId,
   () => {
+    scrollStickToEnd.value = true
     editingUserId.value = null
     followUpQuestions.value = []
     activeOutlineMessageId.value = null
@@ -296,7 +313,7 @@ watch(
 )
 
 watch(
-  () => chat.sending,
+  () => assistantReplyBusy.value,
   (v, prev) => {
     if (prev && !v) void loadFollowUps()
   },
@@ -328,7 +345,6 @@ onMounted(() => {
     updateScrollBottomState()
     updateActiveOutlineFromScroll()
     bindComposerTextareaScroll()
-    enhanceAiMarkdownCodeBlocks()
   })
 })
 
@@ -537,6 +553,8 @@ function runStream(
   afterDone?: () => void,
 ) {
   const sid = chat.activeSessionId!
+  scrollStickToEnd.value = true
+  streamAnimating.value = true
   let assistantId = ''
   /** 已收到的全文（SSE），打字机从该缓冲逐字显示到气泡 */
   let streamBuffer = ''
@@ -585,7 +603,10 @@ function runStream(
       chat.messages = chat.messages.map((m) =>
         m.id === tid ? { ...m, content: streamBuffer.slice(0, streamShown) } : m,
       )
-      void scrollToBottom(false)
+      const el = msgScrollEl.value
+      if (scrollStickToEnd.value && el && isScrollNearBottom(el)) {
+        void scrollToBottom(false)
+      }
     }
     if (streamShown < streamBuffer.length) {
       streamRaf = requestAnimationFrame(pumpTypewriter)
@@ -656,7 +677,10 @@ function runStream(
         }
         await chat.fetchSessions()
         syncUserEditsFromMessages()
-        await scrollToBottom(true)
+        if (scrollStickToEnd.value) {
+          await scrollToBottom(true)
+        }
+        streamAnimating.value = false
         afterDone?.()
       },
     })
@@ -664,6 +688,7 @@ function runStream(
       await waitTypewriterCatchUp()
       stopTypewriter()
       await flushStreamVisual()
+      streamAnimating.value = false
       if ((e as Error).name === 'AbortError') {
         ElMessage.info(t('errors.stopped'))
       } else {
@@ -687,7 +712,7 @@ async function sendUserTurn(displayText: string) {
   }
   const text = displayText.trim()
   const hasCtx = pendingAttachments.value.length > 0
-  if (chat.sending) return
+  if (assistantReplyBusy.value) return
   if (!text && !hasCtx) return
 
   const ctxJson = buildModelContextJson()
@@ -728,7 +753,7 @@ function cancelUserEdit(m: ChatMessage) {
 
 async function resendUserMessage(userMsgId: string) {
   const sid = chat.activeSessionId
-  if (!sid || chat.sending) return
+  if (!sid || assistantReplyBusy.value) return
   const text = (userEdits[userMsgId] ?? '').trim()
   if (!text) {
     ElMessage.warning(t('chat.emptySend'))
@@ -744,7 +769,7 @@ function feedbackVote(m: ChatMessage): 'up' | 'down' | null {
 
 async function toggleFeedback(m: ChatMessage, v: 'up' | 'down') {
   const sid = chat.activeSessionId
-  if (!sid || chat.sending) return
+  if (!sid || assistantReplyBusy.value) return
   const cur = feedbackVote(m)
   const vote = cur === v ? 'clear' : v
   try {
@@ -799,7 +824,7 @@ function openCanvasReadOnly(msg: ChatMessage) {
 
 async function onConvertToDocument(msg: ChatMessage) {
   const sid = chat.activeSessionId
-  if (!sid || chat.sending || docConvertBusyId.value) return
+  if (!sid || assistantReplyBusy.value || docConvertBusyId.value) return
   docConvertBusyId.value = msg.id
   try {
     await chatApi.convertToDocument(sid, msg.id)
@@ -818,30 +843,9 @@ function docMeta(m: ChatMessage): DocumentCardMeta | null {
 }
 
 function mdMessage(m: ChatMessage) {
+  void locale.value
   return renderAiMarkdown(m.content, m.id)
 }
-
-function enhanceAiMarkdownCodeBlocks() {
-  const scroll = msgScrollEl.value
-  if (!scroll) return
-  const labels = {
-    copy: t('chat.copyCode'),
-    collapse: t('chat.collapseCode'),
-    expand: t('chat.expandCode'),
-  }
-  for (const el of scroll.querySelectorAll<HTMLElement>('.prose-ai.markdown-body')) {
-    enhanceMarkdownCodeBlocks(el, labels)
-  }
-}
-
-watchEffect(() => {
-  void chat.messages
-  void chat.sending
-  void locale.value
-  void nextTick(() => {
-    enhanceAiMarkdownCodeBlocks()
-  })
-})
 
 /** 每条助手气泡的 Markdown 标题目录（无标题的消息不在 Map 中） */
 const assistantOutlineByMessageId = computed(() => {
@@ -1009,7 +1013,7 @@ function isOutlineRowCandidate(m: ChatMessage) {
 
 async function loadFollowUps() {
   const sid = chat.activeSessionId
-  if (!sid || chat.sending || props.hideThreadHead) {
+  if (!sid || assistantReplyBusy.value || props.hideThreadHead) {
     followUpQuestions.value = []
     return
   }
@@ -1024,7 +1028,7 @@ const suggestionChips = computed(() => landingSuggestions.value)
 
 /** 落地页推荐问题：点击即用该文案发起一轮对话（等同发送） */
 async function sendFromSuggestionChip(text: string) {
-  if (chat.sending) return
+  if (assistantReplyBusy.value) return
   await sendUserTurn(text)
 }
 
@@ -1321,7 +1325,7 @@ function askFollowUp(q: string) {
                     circle
                     class="msg-toolbar-btn"
                     :type="feedbackVote(m) === 'up' ? 'primary' : 'default'"
-                    :disabled="chat.sending"
+                    :disabled="assistantReplyBusy"
                     @click="toggleFeedback(m, 'up')"
                   >
                     <span class="thumb-wrap" :class="{ 'thumb-wrap--on': feedbackVote(m) === 'up' }">
@@ -1335,7 +1339,7 @@ function askFollowUp(q: string) {
                     circle
                     class="msg-toolbar-btn"
                     :type="feedbackVote(m) === 'down' ? 'danger' : 'default'"
-                    :disabled="chat.sending"
+                    :disabled="assistantReplyBusy"
                     @click="toggleFeedback(m, 'down')"
                   >
                     <span class="thumb-wrap" :class="{ 'thumb-wrap--on': feedbackVote(m) === 'down' }">
@@ -1355,7 +1359,7 @@ function askFollowUp(q: string) {
                     circle
                     class="msg-toolbar-btn"
                     :loading="docConvertBusyId === m.id"
-                    :disabled="!!docConvertBusyId || chat.sending"
+                    :disabled="!!docConvertBusyId || assistantReplyBusy"
                     @click="onConvertToDocument(m)"
                   >
                     <el-icon><EditPen /></el-icon>
@@ -1371,7 +1375,7 @@ function askFollowUp(q: string) {
                   :key="i"
                   type="button"
                   class="follow-chip follow-chip--inline"
-                  :disabled="chat.sending"
+                  :disabled="assistantReplyBusy"
                   @click="askFollowUp(q)"
                 >
                   <span class="follow-chip-text">{{ q }}</span>
