@@ -34,5 +34,12 @@ export const useAuthStore = defineStore('auth', () => {
     username.value = null
   }
 
-  return { authenticated, username, checked, refreshMe, login, logout }
+  /** 会话失效或未登录：仅清本地状态，不调登出接口（避免与 401 循环） */
+  function clearSession() {
+    authenticated.value = false
+    username.value = null
+    checked.value = true
+  }
+
+  return { authenticated, username, checked, refreshMe, login, logout, clearSession }
 })

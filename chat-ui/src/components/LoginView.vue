@@ -3,11 +3,13 @@ import { onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { User, Lock, Key } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 
 import * as authApi from '../api/authApi'
 import { useAuthStore } from '../stores/auth'
 
 const { t } = useI18n()
+const router = useRouter()
 const auth = useAuthStore()
 
 const username = ref('')
@@ -51,6 +53,7 @@ async function onSubmit() {
   try {
     await auth.login(username.value.trim(), password.value, captchaId.value, captchaCode.value.trim())
     ElMessage.success(t('login.success'))
+    await router.replace({ name: 'chat' })
   } catch (e: unknown) {
     ElMessage.error((e as Error).message || t('login.failed'))
     await loadCaptcha().catch(() => {})

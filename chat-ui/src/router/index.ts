@@ -8,6 +8,12 @@ export const router = createRouter({
   routes: [
     { path: '/', redirect: '/chat' },
     {
+      path: '/login',
+      name: 'login',
+      component: () => import('../components/LoginView.vue'),
+      meta: { public: true },
+    },
+    {
       path: '/chat/:sessionId?',
       name: 'chat',
       component: ChatWorkspace,
@@ -15,4 +21,22 @@ export const router = createRouter({
     },
     { path: '/canvas', name: 'canvas', component: CanvasWorkspace },
   ],
+})
+
+router.beforeEach(async (to) => {
+  const { useAuthStore } = await import('../stores/auth')
+  const auth = useAuthStore()
+  if (!auth.checked) {
+    await auth.refreshMe()
+  }
+  if (!auth.authenticated) {
+    if (to.meta.public === true) {
+      return true
+    }
+    return { name: 'login' }
+  }
+  if (to.name === 'login') {
+    return { name: 'chat' }
+  }
+  return true
 })

@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import en from 'element-plus/es/locale/lang/en'
 
-import LoginView from './components/LoginView.vue'
 import { useAuthStore } from './stores/auth'
 import { useLocaleStore } from './stores/locale'
 import { useProfileStore } from './stores/profile'
@@ -40,7 +39,6 @@ const elementLocale = computed(() => (localeStore.locale === 'en-US' ? en : zhCn
   <el-config-provider :locale="elementLocale">
     <div class="root">
       <div v-if="!auth.checked" class="boot" />
-      <LoginView v-else-if="!auth.authenticated" />
       <router-view v-else />
     </div>
   </el-config-provider>
