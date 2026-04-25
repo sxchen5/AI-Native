@@ -8,31 +8,35 @@ function onDocumentClick(e: MouseEvent) {
   const target = e.target as HTMLElement | null
   if (!target) return
 
-  const toggle = target.closest('.chat-code-toggle') as HTMLElement | null
+  const toggle = target.closest('.chat-code-toggle') as HTMLButtonElement | null
   const wrapFromToggle = closestCodeWrap(toggle)
   if (wrapFromToggle && toggle) {
     const collapsed = wrapFromToggle.classList.toggle('chat-code-block--collapsed')
     toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true')
-    toggle.textContent = collapsed
+    toggle.setAttribute(
+      'aria-label',
+      collapsed ? (i18n.global.t('chat.expandCode') as string) : (i18n.global.t('chat.collapseCode') as string),
+    )
+    toggle.title = collapsed
       ? (i18n.global.t('chat.expandCode') as string)
       : (i18n.global.t('chat.collapseCode') as string)
     return
   }
 
-  const copyBtn = target.closest('.chat-code-copy') as HTMLElement | null
+  const copyBtn = target.closest('.chat-code-copy') as HTMLButtonElement | null
   const wrap = closestCodeWrap(copyBtn)
   if (!wrap || !copyBtn) return
   const code = wrap.querySelector('pre code')
   const text = code?.textContent ?? ''
   if (!text) return
   void (async () => {
+    const showCopied = () => {
+      copyBtn.classList.add('chat-code-copy--done')
+      window.setTimeout(() => copyBtn.classList.remove('chat-code-copy--done'), 1600)
+    }
     try {
       await navigator.clipboard.writeText(text)
-      const prev = copyBtn.textContent
-      copyBtn.textContent = '✓'
-      window.setTimeout(() => {
-        copyBtn.textContent = prev
-      }, 1600)
+      showCopied()
     } catch {
       try {
         const ta = document.createElement('textarea')
@@ -43,11 +47,7 @@ function onDocumentClick(e: MouseEvent) {
         ta.select()
         document.execCommand('copy')
         document.body.removeChild(ta)
-        const prev = copyBtn.textContent
-        copyBtn.textContent = '✓'
-        window.setTimeout(() => {
-          copyBtn.textContent = prev
-        }, 1600)
+        showCopied()
       } catch {
         /* ignore */
       }

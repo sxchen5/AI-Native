@@ -151,16 +151,23 @@ function renderCodeBlockHtml(text: string, lang: string): string {
   }
   const safeLang = escapeHtml(language)
   const displayLang = escapeHtml(inferLangFromCode(text, language))
-  const collapse = escapeHtml(i18n.global.t('chat.collapseCode') as string)
   const copyLabel = escapeHtml(i18n.global.t('chat.copyCode') as string)
+  const collapseLabel = escapeHtml(i18n.global.t('chat.collapseCode') as string)
   const streamCls = codeBlockStreamLight ? ' chat-code-block--stream-light' : ''
+  /** 参考 UI：左侧语言名 + 箭头收起；右侧仅复制图标 */
+  const chevronSvg =
+    '<svg class="chat-code-toggle-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>'
+  const copySvg =
+    '<svg class="chat-code-copy-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>'
+  const checkSvg =
+    '<svg class="chat-code-copy-check" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>'
   return `<div class="chat-code-block${streamCls}" data-lang="${displayLang}">
 <div class="chat-code-toolbar">
 <div class="chat-code-toolbar-left">
 <span class="chat-code-lang">${displayLang}</span>
-<button type="button" class="chat-code-toggle" aria-expanded="true">${collapse}</button>
+<button type="button" class="chat-code-toggle" aria-expanded="true" aria-label="${collapseLabel}" title="${collapseLabel}">${chevronSvg}</button>
 </div>
-<button type="button" class="chat-code-copy" aria-label="${copyLabel}">${copyLabel}</button>
+<button type="button" class="chat-code-copy" aria-label="${copyLabel}" title="${copyLabel}">${copySvg}${checkSvg}</button>
 </div>
 <div class="chat-code-body">
 <pre><code class="hljs language-${safeLang}">${highlighted}</code></pre>
@@ -190,8 +197,23 @@ const marked = new Marked({
 
 const PURIFY_OPTS = {
   USE_PROFILES: { html: true },
-  ADD_ATTR: ['align', 'id', 'aria-expanded', 'aria-label', 'type', 'data-lang', 'class'],
-  ADD_TAGS: ['button', 'div', 'span', 'pre', 'code'],
+  ADD_ATTR: [
+    'align',
+    'id',
+    'aria-expanded',
+    'aria-label',
+    'title',
+    'type',
+    'data-lang',
+    'class',
+    'viewBox',
+    'width',
+    'height',
+    'xmlns',
+    'fill',
+    'd',
+  ],
+  ADD_TAGS: ['button', 'div', 'span', 'pre', 'code', 'svg', 'path'],
 }
 
 /**

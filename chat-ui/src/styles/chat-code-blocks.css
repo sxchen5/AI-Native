@@ -1,67 +1,120 @@
-/* AI 气泡与画布预览：代码块工具栏与按语言微调高亮（依赖 .markdown-body 内 hljs 结构） */
+/* 聊天气泡 / 画布：代码块（参考 IDE 条 + 白底正文 + hljs 着色） */
 
 .markdown-body .chat-code-block {
   position: relative;
   margin: 0.85em 0;
-  border-radius: 10px;
-  border: 1px solid var(--border-subtle, rgba(120, 130, 150, 0.22));
-  background: var(--bg-input-fill, rgba(0, 0, 0, 0.04));
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle, #e1e4e8);
   overflow: hidden;
+  background: var(--bg-chat-surface, #fff);
 }
 
 .markdown-body .chat-code-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  min-height: 36px;
-  padding: 0 8px 0 10px;
-  border-bottom: 1px solid var(--border-subtle, rgba(120, 130, 150, 0.18));
-  background: color-mix(in srgb, var(--bg-chat-surface, #fff) 88%, var(--bg-input-fill, #f4f4f5));
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid var(--border-subtle, #e1e4e8);
+  background: var(--chat-code-toolbar-bg, #f6f8fa);
 }
 
 .markdown-body .chat-code-toolbar-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
 }
 
 .markdown-body .chat-code-lang {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   text-transform: lowercase;
-  color: var(--text-muted, #68748b);
+  color: var(--text-secondary, #57606a);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-.markdown-body .chat-code-toggle,
-.markdown-body .chat-code-copy {
-  font: inherit;
-  font-size: 12px;
-  padding: 4px 10px;
+.markdown-body .chat-code-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin: 0;
+  border: none;
   border-radius: 6px;
-  border: 1px solid transparent;
   background: transparent;
-  color: var(--text-secondary, #5c6570);
+  color: var(--text-muted, #656d76);
   cursor: pointer;
-  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.markdown-body .chat-code-toggle:hover,
-.markdown-body .chat-code-copy:hover {
-  background: var(--bg-input-fill, rgba(0, 0, 0, 0.06));
-  color: var(--text-primary, #1a1a1a);
+.markdown-body .chat-code-toggle:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-primary, #24292f);
+}
+
+.markdown-body .chat-code-toggle-ic {
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+.markdown-body .chat-code-block--collapsed .chat-code-toggle-ic {
+  transform: rotate(180deg);
 }
 
 .markdown-body .chat-code-copy {
-  font-weight: 600;
-  color: var(--el-color-primary, #409eff);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted, #656d76);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.markdown-body .chat-code-copy:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-primary, #24292f);
+}
+
+.markdown-body .chat-code-copy svg {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  display: block;
+  transition: opacity 0.15s ease;
+}
+
+.markdown-body .chat-code-copy .chat-code-copy-check {
+  opacity: 0;
+  color: var(--el-color-success, #67c23a);
+}
+
+.markdown-body .chat-code-copy.chat-code-copy--done .chat-code-copy-ic {
+  opacity: 0;
+}
+
+.markdown-body .chat-code-copy.chat-code-copy--done .chat-code-copy-check {
+  opacity: 1;
 }
 
 .markdown-body .chat-code-block--collapsed .chat-code-body {
   display: none;
+}
+
+.markdown-body .chat-code-body {
+  background: var(--chat-code-body-bg, #fff);
 }
 
 .markdown-body .chat-code-body pre {
@@ -77,30 +130,36 @@
   font-size: 13px;
   line-height: 1.55;
   overflow-x: auto;
+  background: transparent !important;
 }
 
-/* 流式阶段未跑 hljs：仍保持等宽与区块感 */
+/* 流式阶段未跑 hljs */
 .markdown-body .chat-code-block--stream-light .chat-code-body pre code.hljs {
   color: var(--text-primary, #24292f);
 }
 
-/* 按语言微调 token 色相（hljs 类名在各语言中略有差异，以下为常见子集） */
+/* —— 按语言微调 token（与参考图：键偏蓝、字符串深蓝、布尔偏品红等）—— */
+.markdown-body .chat-code-block[data-lang='yaml'] .hljs-attr,
+.markdown-body .chat-code-block[data-lang='yaml'] .hljs-attribute {
+  color: #0969da;
+}
+.markdown-body .chat-code-block[data-lang='yaml'] .hljs-string {
+  color: #0a3069;
+}
+.markdown-body .chat-code-block[data-lang='yaml'] .hljs-number,
+.markdown-body .chat-code-block[data-lang='yaml'] .hljs-literal {
+  color: #bf3989;
+}
+
 .markdown-body .chat-code-block[data-lang='json'] .hljs-attr {
   color: #0550ae;
 }
 .markdown-body .chat-code-block[data-lang='json'] .hljs-string {
   color: #0a3069;
 }
-.markdown-body .chat-code-block[data-lang='json'] .hljs-number {
+.markdown-body .chat-code-block[data-lang='json'] .hljs-number,
+.markdown-body .chat-code-block[data-lang='json'] .hljs-literal {
   color: #116329;
-}
-
-.markdown-body .chat-code-block[data-lang='yaml'] .hljs-attr,
-.markdown-body .chat-code-block[data-lang='yaml'] .hljs-attribute {
-  color: #953800;
-}
-.markdown-body .chat-code-block[data-lang='yaml'] .hljs-string {
-  color: #0a3069;
 }
 
 .markdown-body .chat-code-block[data-lang='bash'] .hljs-built_in,
@@ -165,6 +224,24 @@
   color: #8250df;
 }
 
+.markdown-body .chat-code-block[data-lang='cpp'] .hljs-keyword,
+.markdown-body .chat-code-block[data-lang='c'] .hljs-keyword,
+.markdown-body .chat-code-block[data-lang='csharp'] .hljs-keyword {
+  color: #cf222e;
+}
+.markdown-body .chat-code-block[data-lang='cpp'] .hljs-string,
+.markdown-body .chat-code-block[data-lang='c'] .hljs-string,
+.markdown-body .chat-code-block[data-lang='csharp'] .hljs-string {
+  color: #0a3069;
+}
+
+.markdown-body .chat-code-block[data-lang='dockerfile'] .hljs-keyword {
+  color: #cf222e;
+}
+.markdown-body .chat-code-block[data-lang='dockerfile'] .hljs-string {
+  color: #0a3069;
+}
+
 .markdown-body .chat-code-block[data-lang='xml'] .hljs-name,
 .markdown-body .chat-code-block[data-lang='html'] .hljs-name {
   color: #116329;
@@ -174,23 +251,40 @@
   color: #0a3069;
 }
 
+.markdown-body .chat-code-block[data-lang='markdown'] .hljs-section {
+  color: #0550ae;
+}
+
+/* 深色主题 */
+html.dark {
+  --chat-code-toolbar-bg: rgba(255, 255, 255, 0.06);
+  --chat-code-body-bg: rgba(0, 0, 0, 0.25);
+}
+
+html.dark .markdown-body .chat-code-block[data-lang='yaml'] .hljs-attr,
+html.dark .markdown-body .chat-code-block[data-lang='yaml'] .hljs-attribute {
+  color: #79c0ff;
+}
+html.dark .markdown-body .chat-code-block[data-lang='yaml'] .hljs-string {
+  color: #a5d6ff;
+}
+html.dark .markdown-body .chat-code-block[data-lang='yaml'] .hljs-number,
+html.dark .markdown-body .chat-code-block[data-lang='yaml'] .hljs-literal {
+  color: #ff7b72;
+}
+
 html.dark .markdown-body .chat-code-block[data-lang='json'] .hljs-attr {
   color: #79c0ff;
 }
 html.dark .markdown-body .chat-code-block[data-lang='json'] .hljs-string {
   color: #a5d6ff;
 }
-html.dark .markdown-body .chat-code-block[data-lang='yaml'] .hljs-attr,
-html.dark .markdown-body .chat-code-block[data-lang='yaml'] .hljs-attribute {
-  color: #ffa657;
-}
-html.dark .markdown-body .chat-code-block[data-lang='yaml'] .hljs-string {
-  color: #a5d6ff;
-}
+
 html.dark .markdown-body .chat-code-block[data-lang='bash'] .hljs-built_in,
 html.dark .markdown-body .chat-code-block[data-lang='bash'] .hljs-keyword {
   color: #ff7b72;
 }
+
 html.dark .markdown-body .chat-code-block[data-lang='java'] .hljs-keyword,
 html.dark .markdown-body .chat-code-block[data-lang='kotlin'] .hljs-keyword {
   color: #ff7b72;
@@ -199,9 +293,11 @@ html.dark .markdown-body .chat-code-block[data-lang='java'] .hljs-string,
 html.dark .markdown-body .chat-code-block[data-lang='kotlin'] .hljs-string {
   color: #a5d6ff;
 }
+
 html.dark .markdown-body .chat-code-block[data-lang='python'] .hljs-keyword {
   color: #ff7b72;
 }
+
 html.dark .markdown-body .chat-code-block[data-lang='typescript'] .hljs-keyword,
 html.dark .markdown-body .chat-code-block[data-lang='javascript'] .hljs-keyword {
   color: #ff7b72;
