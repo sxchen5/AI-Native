@@ -34,8 +34,10 @@ public class ChatLandingSuggestionsController {
 
     private static final List<String> FALLBACK = List.of(
             "什么是 AI Agent？",
+            "Kubernetes 里 Deployment 和 StatefulSet 怎么选？",
             "Java 后端最近有哪些趋势？",
             "用 Spring Boot 写个健康检查接口",
+            "PostgreSQL 慢查询一般从哪里排查？",
             "如何把 Markdown 转成 PDF？",
             "解释一下 SSE 和 WebSocket 的区别",
             "帮我写一段周报总结模版",
@@ -58,6 +60,7 @@ public class ChatLandingSuggestionsController {
         String system = """
                 你是中文对话产品的「开场问题」策划：请生成恰好9条**用户可能想向 AI 提问**的中文短句。
                 要求：覆盖尽量多元的行业与场景（如科技、制造、金融、医疗、教育、法律、市场、设计、生活、政务等），彼此主题不要雷同；**不要**与常见固定示例句雷同，尽量新颖、具体。
+                其中至少3条须明确偏向**IT 行业技术类**（如编程语言、框架与中间件、云原生与 K8s、数据库与性能、网络与安全、DevOps/CI、架构设计、AI 工程化、开源生态等），表述要像真实开发者或技术负责人会问的具体问题。
                 每条要自然、像真实用户会输入的问句；不要编号、不要引号、不要任何前后说明；每条不超过36个汉字；不要用省略号结尾。
                 输出格式：严格9行，每行一条完整问句。
                 """;

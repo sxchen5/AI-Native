@@ -17,7 +17,8 @@ import {
 } from '@element-plus/icons-vue'
 import { FullScreen } from '@element-plus/icons-vue'
 import { ElInput, ElMessage, ElMessageBox } from 'element-plus'
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import type { CSSProperties } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -48,7 +49,15 @@ const bottomAnchor = ref<HTMLElement | null>(null)
 const msgScrollEl = ref<HTMLElement | null>(null)
 /** 当前用于右侧 Markdown 目录的助手消息 id（按滚动区域可见度选取） */
 const activeOutlineMessageId = ref<string | null>(null)
+/** 当前视区内对应的标题锚点 id（与正文 h* 的 id 一致） */
+const activeOutlineHeadingId = ref<string | null>(null)
+/** 点击目录后短时间内不随几何重算覆盖（避免 smooth scroll 过程跳动） */
+const outlineGeomLockUntil = ref(0)
+const outlineLockMessageId = ref<string | null>(null)
+const outlineLockHeadingId = ref<string | null>(null)
+const OUTLINE_GEOM_LOCK_MS = 1200
 let outlineScrollRaf = 0
+let outlineResizeObs: ResizeObserver | null = null
 /** 右侧 Markdown 目录面板是否展开（可手动关闭，有关闭条时再显示） */
 const outlinePanelVisible = ref(true)
 const showJumpToBottom = ref(false)
@@ -84,6 +93,8 @@ const showLanding = computed(
 
 const landingSuggestions = ref<string[]>([])
 const loadingLandingSuggestions = ref(false)
+/** 变更时触发落地推荐芯片入场动画 */
+const landingChipsAnimateKey = ref(0)
 let landingFetchGen = 0
 
 /** 无会话或当前会话尚无消息时展示落地推荐（画布内嵌不请求） */
@@ -99,6 +110,7 @@ async function refreshLandingSuggestions() {
     const qs = await chatApi.fetchLandingSuggestions()
     if (gen !== landingFetchGen) return
     landingSuggestions.value = qs
+    if (qs.length) landingChipsAnimateKey.value++
   } catch {
     if (gen !== landingFetchGen) return
     landingSuggestions.value = []
@@ -250,6 +262,10 @@ watch(
     editingUserId.value = null
     followUpQuestions.value = []
     activeOutlineMessageId.value = null
+    activeOutlineHeadingId.value = null
+    outlineGeomLockUntil.value = 0
+    outlineLockMessageId.value = null
+    outlineLockHeadingId.value = null
     outlinePanelVisible.value = true
     void scrollToBottom(false)
     void nextTick(() => updateScrollBottomState())
@@ -305,6 +321,23 @@ onMounted(() => {
   })
 })
 
+watchEffect((onCleanup) => {
+  const el = msgScrollEl.value
+  if (!el || props.hideThreadHead) {
+    outlineResizeObs?.disconnect()
+    outlineResizeObs = null
+    return
+  }
+  outlineResizeObs = new ResizeObserver(() => {
+    updateActiveOutlineFromScroll()
+  })
+  outlineResizeObs.observe(el)
+  onCleanup(() => {
+    outlineResizeObs?.disconnect()
+    outlineResizeObs = null
+  })
+})
+
 onBeforeUnmount(() => {
   unbindComposerTextareaScroll()
   if (scrollThumbTimer) clearTimeout(scrollThumbTimer)
@@ -321,6 +354,8 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(outlineScrollRaf)
     outlineScrollRaf = 0
   }
+  outlineResizeObs?.disconnect()
+  outlineResizeObs = null
 })
 
 async function copyText(text: string) {
@@ -797,6 +832,13 @@ function findHeadingInBubble(body: Element, it: ChatHeadingTocItem): HTMLElement
 }
 
 async function scrollToHeading(it: ChatHeadingTocItem) {
+  const lockUntil = performance.now() + OUTLINE_GEOM_LOCK_MS
+  outlineGeomLockUntil.value = lockUntil
+  outlineLockMessageId.value = it.messageId
+  outlineLockHeadingId.value = it.id
+  activeOutlineMessageId.value = it.messageId
+  activeOutlineHeadingId.value = it.id
+
   await nextTick()
   const scrollEl = msgScrollEl.value
   if (!scrollEl) return
@@ -833,15 +875,30 @@ function updateActiveOutlineFromScroll() {
     outlineScrollRaf = 0
     const scrollEl = msgScrollEl.value
     if (!scrollEl || props.hideThreadHead) return
+
+    const now = performance.now()
+    if (
+      now < outlineGeomLockUntil.value &&
+      outlineLockMessageId.value &&
+      outlineLockHeadingId.value
+    ) {
+      activeOutlineMessageId.value = outlineLockMessageId.value
+      activeOutlineHeadingId.value = outlineLockHeadingId.value
+      return
+    }
+
     const rows = scrollEl.querySelectorAll<HTMLElement>('.row[data-outline-candidate="1"]')
     if (!rows.length) {
       activeOutlineMessageId.value = null
+      activeOutlineHeadingId.value = null
       return
     }
     const top = scrollEl.scrollTop
     const bottom = top + scrollEl.clientHeight
+    const anchorY = top + Math.min(72, scrollEl.clientHeight * 0.12)
     let bestId: string | null = null
     let bestScore = -1
+    let bestRow: HTMLElement | null = null
     for (const row of rows) {
       const off = row.offsetTop
       const h = row.offsetHeight
@@ -849,9 +906,45 @@ function updateActiveOutlineFromScroll() {
       if (overlap > bestScore) {
         bestScore = overlap
         bestId = row.dataset.messageId ?? null
+        bestRow = row
       }
     }
-    activeOutlineMessageId.value = bestScore > 0 ? bestId : null
+    if (bestScore <= 0 || !bestId || !bestRow) {
+      activeOutlineMessageId.value = null
+      activeOutlineHeadingId.value = null
+      return
+    }
+
+    const items = assistantOutlineByMessageId.value.get(bestId) ?? []
+    const body = bestRow.querySelector('.prose-ai.markdown-body')
+    let headingId: string | null = null
+    if (body && items.length) {
+      const headings = Array.from(body.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6'))
+      let domIdx = -1
+      for (let i = headings.length - 1; i >= 0; i--) {
+        const h = headings[i]!
+        const contentY =
+          h.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop
+        if (contentY <= anchorY + 1) {
+          domIdx = i
+          break
+        }
+      }
+      if (domIdx < 0) {
+        const h0 = headings[0]
+        headingId = h0?.id?.trim() ? h0.id : items[0]?.id ?? null
+      } else {
+        const h = headings[domIdx]!
+        headingId =
+          h.id?.trim()
+            ? h.id
+            : items[Math.min(domIdx, items.length - 1)]?.id ?? null
+      }
+    }
+    if (!headingId && items.length) headingId = items[0]!.id
+
+    activeOutlineMessageId.value = bestId
+    activeOutlineHeadingId.value = headingId
   })
 }
 
@@ -1002,9 +1095,10 @@ function askFollowUp(q: string) {
         <div v-else class="suggestion-grid">
           <button
             v-for="(chip, i) in suggestionChips"
-            :key="i"
+            :key="`${landingChipsAnimateKey}-${i}`"
             type="button"
             class="suggestion-chip"
+            :style="{ '--chip-i': String(i) } as CSSProperties"
             @click="sendFromSuggestionChip(chip)"
           >
             {{ chip }}
@@ -1020,9 +1114,10 @@ function askFollowUp(q: string) {
         <div v-else class="suggestion-grid">
           <button
             v-for="(chip, i) in suggestionChips"
-            :key="i"
+            :key="`${landingChipsAnimateKey}-${i}`"
             type="button"
             class="suggestion-chip"
+            :style="{ '--chip-i': String(i) } as CSSProperties"
             @click="sendFromSuggestionChip(chip)"
           >
             {{ chip }}
@@ -1353,7 +1448,10 @@ function askFollowUp(q: string) {
           :key="it.id"
           type="button"
           class="chat-md-outline-link"
-          :class="`depth-${it.depth}`"
+          :class="[
+            `depth-${it.depth}`,
+            { 'chat-md-outline-link--active': activeOutlineHeadingId === it.id },
+          ]"
           @click="scrollToHeading(it)"
         >
           {{ it.text }}
@@ -1593,6 +1691,12 @@ function askFollowUp(q: string) {
   color: var(--text-primary);
 }
 
+.chat-md-outline-link--active {
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+
 .chat-md-outline-link.depth-1 {
   font-weight: 600;
 }
@@ -1693,6 +1797,19 @@ function askFollowUp(q: string) {
   }
 }
 
+@keyframes landing-chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
 .suggestion-chip {
   border: none;
   background: var(--bg-input-fill);
@@ -1702,6 +1819,8 @@ function askFollowUp(q: string) {
   padding: 10px 14px;
   border-radius: 999px;
   cursor: pointer;
+  animation: landing-chip-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--chip-i, 0) * 45ms);
   transition:
     background 0.2s ease,
     box-shadow 0.2s ease;
