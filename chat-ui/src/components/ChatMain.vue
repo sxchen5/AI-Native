@@ -18,13 +18,23 @@ import {
 import { FullScreen } from '@element-plus/icons-vue'
 import { ElInput, ElMessage, ElMessageBox } from 'element-plus'
 import type { CSSProperties } from 'vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, watchEffect } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+  watchEffect,
+} from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import * as chatApi from '../api/chatApi'
 import type { ChatMessage, DocumentCardMeta } from '../api/types'
 import { useChatStore } from '../stores/chat'
+import { enhanceMarkdownCodeBlocks } from '../utils/chatCodeBlocks'
 import { extractChatMarkdownHeadingToc, type ChatHeadingTocItem } from '../utils/chatMarkdownHeadings'
 import { renderAiMarkdown } from '../utils/markdown'
 import { markdownToPlainText } from '../utils/plainText'
@@ -36,7 +46,7 @@ import { parseFeedbackVote } from '../utils/messageFeedback'
 import type { AttachmentChip } from '../utils/modelContext'
 import { parseUserBubbleFromMetadata } from '../utils/modelContext'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 const chat = useChatStore()
 
@@ -318,6 +328,7 @@ onMounted(() => {
     updateScrollBottomState()
     updateActiveOutlineFromScroll()
     bindComposerTextareaScroll()
+    enhanceAiMarkdownCodeBlocks()
   })
 })
 
@@ -544,6 +555,26 @@ function runStream(
     }
   }
 
+  /** 流已结束但打字机尚未追上缓冲时，逐帧泵送直至对齐，避免 onDone 一次性整段闪现 */
+  function waitTypewriterCatchUp(): Promise<void> {
+    const deadline = performance.now() + 30_000
+    return new Promise((resolve) => {
+      const step = () => {
+        if (streamShown >= streamBuffer.length) {
+          resolve()
+          return
+        }
+        if (performance.now() > deadline) {
+          resolve()
+          return
+        }
+        schedulePump()
+        requestAnimationFrame(step)
+      }
+      step()
+    })
+  }
+
   const pumpTypewriter = () => {
     streamRaf = 0
     const tid = assistantId || streamTargetMessageId
@@ -617,6 +648,7 @@ function runStream(
         schedulePump()
       },
       async onDone() {
+        await waitTypewriterCatchUp()
         stopTypewriter()
         await flushStreamVisual()
         if (appendAfter) {
@@ -628,9 +660,10 @@ function runStream(
         afterDone?.()
       },
     })
-    .catch((e: unknown) => {
+    .catch(async (e: unknown) => {
+      await waitTypewriterCatchUp()
       stopTypewriter()
-      void flushStreamVisual()
+      await flushStreamVisual()
       if ((e as Error).name === 'AbortError') {
         ElMessage.info(t('errors.stopped'))
       } else {
@@ -787,6 +820,28 @@ function docMeta(m: ChatMessage): DocumentCardMeta | null {
 function mdMessage(m: ChatMessage) {
   return renderAiMarkdown(m.content, m.id)
 }
+
+function enhanceAiMarkdownCodeBlocks() {
+  const scroll = msgScrollEl.value
+  if (!scroll) return
+  const labels = {
+    copy: t('chat.copyCode'),
+    collapse: t('chat.collapseCode'),
+    expand: t('chat.expandCode'),
+  }
+  for (const el of scroll.querySelectorAll<HTMLElement>('.prose-ai.markdown-body')) {
+    enhanceMarkdownCodeBlocks(el, labels)
+  }
+}
+
+watchEffect(() => {
+  void chat.messages
+  void chat.sending
+  void locale.value
+  void nextTick(() => {
+    enhanceAiMarkdownCodeBlocks()
+  })
+})
 
 /** 每条助手气泡的 Markdown 标题目录（无标题的消息不在 Map 中） */
 const assistantOutlineByMessageId = computed(() => {

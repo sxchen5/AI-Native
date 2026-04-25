@@ -9,7 +9,7 @@ import {
   View,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -19,12 +19,13 @@ import * as chatApi from '../api/chatApi'
 import { useChatStore } from '../stores/chat'
 import { useUiStore } from '../stores/ui'
 import { extractMarkdownToc, firstMarkdownTitle } from '../utils/canvasOutline'
+import { enhanceMarkdownCodeBlocks } from '../utils/chatCodeBlocks'
 import { renderAiMarkdown } from '../utils/markdown'
 import { useScrollbarFade } from '../utils/scrollbarFade'
 
 const CANVAS_CHAT_WIDTH_KEY = 'doubao-canvas-chat-width-px'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const chat = useChatStore()
@@ -53,6 +54,21 @@ const tocItems = computed(() => extractMarkdownToc(canvasDraft.value))
 function md(html: string) {
   return renderAiMarkdown(html)
 }
+
+watchEffect(() => {
+  void canvasDraft.value
+  void locale.value
+  void previewCollapsed.value
+  void nextTick(() => {
+    const root = previewRef.value?.querySelector<HTMLElement>('.prose-ai.markdown-body')
+    if (!root) return
+    enhanceMarkdownCodeBlocks(root, {
+      copy: t('chat.copyCode'),
+      collapse: t('chat.collapseCode'),
+      expand: t('chat.expandCode'),
+    })
+  })
+})
 
 function touchModified() {
   lastModified.value = new Date()

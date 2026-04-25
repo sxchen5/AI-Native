@@ -1,0 +1,207 @@
+/* AI 气泡与画布预览：代码块工具栏与按语言微调高亮（依赖 .markdown-body 内 hljs 结构） */
+
+.markdown-body .chat-code-block {
+  position: relative;
+  margin: 0.85em 0;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle, rgba(120, 130, 150, 0.22));
+  background: var(--bg-input-fill, rgba(0, 0, 0, 0.04));
+  overflow: hidden;
+}
+
+.markdown-body .chat-code-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 8px 0 10px;
+  border-bottom: 1px solid var(--border-subtle, rgba(120, 130, 150, 0.18));
+  background: color-mix(in srgb, var(--bg-chat-surface, #fff) 88%, var(--bg-input-fill, #f4f4f5));
+}
+
+.markdown-body .chat-code-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.markdown-body .chat-code-lang {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  color: var(--text-muted, #68748b);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.markdown-body .chat-code-toggle,
+.markdown-body .chat-code-copy {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary, #5c6570);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.markdown-body .chat-code-toggle:hover,
+.markdown-body .chat-code-copy:hover {
+  background: var(--bg-input-fill, rgba(0, 0, 0, 0.06));
+  color: var(--text-primary, #1a1a1a);
+}
+
+.markdown-body .chat-code-copy {
+  font-weight: 600;
+  color: var(--el-color-primary, #409eff);
+}
+
+.markdown-body .chat-code-block--collapsed .chat-code-body {
+  display: none;
+}
+
+.markdown-body .chat-code-body pre {
+  margin: 0 !important;
+  border-radius: 0 !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+.markdown-body .chat-code-body pre code.hljs {
+  display: block;
+  padding: 12px 14px !important;
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-x: auto;
+}
+
+/* 按语言微调 token 色相（hljs 类名在各语言中略有差异，以下为常见子集） */
+.markdown-body .chat-code-block[data-lang='json'] .hljs-attr {
+  color: #0550ae;
+}
+.markdown-body .chat-code-block[data-lang='json'] .hljs-string {
+  color: #0a3069;
+}
+.markdown-body .chat-code-block[data-lang='json'] .hljs-number {
+  color: #116329;
+}
+
+.markdown-body .chat-code-block[data-lang='yaml'] .hljs-attr,
+.markdown-body .chat-code-block[data-lang='yaml'] .hljs-attribute {
+  color: #953800;
+}
+.markdown-body .chat-code-block[data-lang='yaml'] .hljs-string {
+  color: #0a3069;
+}
+
+.markdown-body .chat-code-block[data-lang='bash'] .hljs-built_in,
+.markdown-body .chat-code-block[data-lang='bash'] .hljs-keyword {
+  color: #cf222e;
+}
+.markdown-body .chat-code-block[data-lang='bash'] .hljs-string {
+  color: #0a3069;
+}
+
+.markdown-body .chat-code-block[data-lang='java'] .hljs-keyword,
+.markdown-body .chat-code-block[data-lang='kotlin'] .hljs-keyword {
+  color: #cf222e;
+}
+.markdown-body .chat-code-block[data-lang='java'] .hljs-title,
+.markdown-body .chat-code-block[data-lang='java'] .hljs-type,
+.markdown-body .chat-code-block[data-lang='kotlin'] .hljs-type {
+  color: #953800;
+}
+.markdown-body .chat-code-block[data-lang='java'] .hljs-string,
+.markdown-body .chat-code-block[data-lang='kotlin'] .hljs-string {
+  color: #0a3069;
+}
+
+.markdown-body .chat-code-block[data-lang='python'] .hljs-keyword {
+  color: #cf222e;
+}
+.markdown-body .chat-code-block[data-lang='python'] .hljs-string {
+  color: #0a3069;
+}
+.markdown-body .chat-code-block[data-lang='python'] .hljs-meta {
+  color: #6e7781;
+}
+
+.markdown-body .chat-code-block[data-lang='typescript'] .hljs-keyword,
+.markdown-body .chat-code-block[data-lang='javascript'] .hljs-keyword {
+  color: #cf222e;
+}
+.markdown-body .chat-code-block[data-lang='typescript'] .hljs-title,
+.markdown-body .chat-code-block[data-lang='javascript'] .hljs-title {
+  color: #8250df;
+}
+.markdown-body .chat-code-block[data-lang='typescript'] .hljs-string,
+.markdown-body .chat-code-block[data-lang='javascript'] .hljs-string {
+  color: #0a3069;
+}
+
+.markdown-body .chat-code-block[data-lang='sql'] .hljs-keyword {
+  color: #cf222e;
+}
+.markdown-body .chat-code-block[data-lang='sql'] .hljs-string {
+  color: #0a3069;
+}
+
+.markdown-body .chat-code-block[data-lang='go'] .hljs-keyword {
+  color: #cf222e;
+}
+.markdown-body .chat-code-block[data-lang='rust'] .hljs-keyword {
+  color: #cf222e;
+}
+.markdown-body .chat-code-block[data-lang='rust'] .hljs-meta {
+  color: #8250df;
+}
+
+.markdown-body .chat-code-block[data-lang='xml'] .hljs-name,
+.markdown-body .chat-code-block[data-lang='html'] .hljs-name {
+  color: #116329;
+}
+.markdown-body .chat-code-block[data-lang='xml'] .hljs-string,
+.markdown-body .chat-code-block[data-lang='html'] .hljs-string {
+  color: #0a3069;
+}
+
+html.dark .markdown-body .chat-code-block[data-lang='json'] .hljs-attr {
+  color: #79c0ff;
+}
+html.dark .markdown-body .chat-code-block[data-lang='json'] .hljs-string {
+  color: #a5d6ff;
+}
+html.dark .markdown-body .chat-code-block[data-lang='yaml'] .hljs-attr,
+html.dark .markdown-body .chat-code-block[data-lang='yaml'] .hljs-attribute {
+  color: #ffa657;
+}
+html.dark .markdown-body .chat-code-block[data-lang='yaml'] .hljs-string {
+  color: #a5d6ff;
+}
+html.dark .markdown-body .chat-code-block[data-lang='bash'] .hljs-built_in,
+html.dark .markdown-body .chat-code-block[data-lang='bash'] .hljs-keyword {
+  color: #ff7b72;
+}
+html.dark .markdown-body .chat-code-block[data-lang='java'] .hljs-keyword,
+html.dark .markdown-body .chat-code-block[data-lang='kotlin'] .hljs-keyword {
+  color: #ff7b72;
+}
+html.dark .markdown-body .chat-code-block[data-lang='java'] .hljs-string,
+html.dark .markdown-body .chat-code-block[data-lang='kotlin'] .hljs-string {
+  color: #a5d6ff;
+}
+html.dark .markdown-body .chat-code-block[data-lang='python'] .hljs-keyword {
+  color: #ff7b72;
+}
+html.dark .markdown-body .chat-code-block[data-lang='typescript'] .hljs-keyword,
+html.dark .markdown-body .chat-code-block[data-lang='javascript'] .hljs-keyword {
+  color: #ff7b72;
+}
+html.dark .markdown-body .chat-code-block[data-lang='typescript'] .hljs-title,
+html.dark .markdown-body .chat-code-block[data-lang='javascript'] .hljs-title {
+  color: #d2a8ff;
+}

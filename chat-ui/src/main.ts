@@ -10,6 +10,7 @@ import { i18n } from './i18n'
 import { router } from './router'
 import './styles/theme.css'
 import 'github-markdown-css/github-markdown.css'
+import './styles/chat-code-blocks.css'
 import './style.css'
 
 const app = createApp(App)

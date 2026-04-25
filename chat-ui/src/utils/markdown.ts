@@ -1,11 +1,22 @@
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js/lib/core'
 import bash from 'highlight.js/lib/languages/bash'
+import cpp from 'highlight.js/lib/languages/cpp'
+import csharp from 'highlight.js/lib/languages/csharp'
+import dockerfile from 'highlight.js/lib/languages/dockerfile'
+import go from 'highlight.js/lib/languages/go'
+import java from 'highlight.js/lib/languages/java'
 import javascript from 'highlight.js/lib/languages/javascript'
 import json from 'highlight.js/lib/languages/json'
+import kotlin from 'highlight.js/lib/languages/kotlin'
+import markdown from 'highlight.js/lib/languages/markdown'
+import powershell from 'highlight.js/lib/languages/powershell'
 import python from 'highlight.js/lib/languages/python'
+import rust from 'highlight.js/lib/languages/rust'
+import sql from 'highlight.js/lib/languages/sql'
 import typescript from 'highlight.js/lib/languages/typescript'
 import xml from 'highlight.js/lib/languages/xml'
+import yaml from 'highlight.js/lib/languages/yaml'
 import type { Token, Tokens } from 'marked'
 import { Marked, Renderer } from 'marked'
 
@@ -22,6 +33,18 @@ hljs.registerLanguage('python', python)
 hljs.registerLanguage('bash', bash)
 hljs.registerLanguage('xml', xml)
 hljs.registerLanguage('html', xml)
+hljs.registerLanguage('yaml', yaml)
+hljs.registerLanguage('java', java)
+hljs.registerLanguage('kotlin', kotlin)
+hljs.registerLanguage('go', go)
+hljs.registerLanguage('rust', rust)
+hljs.registerLanguage('cpp', cpp)
+hljs.registerLanguage('c', cpp)
+hljs.registerLanguage('csharp', csharp)
+hljs.registerLanguage('sql', sql)
+hljs.registerLanguage('powershell', powershell)
+hljs.registerLanguage('markdown', markdown)
+hljs.registerLanguage('dockerfile', dockerfile)
 
 function escapeHtml(text: string) {
   return text
@@ -99,7 +122,22 @@ class AiRenderer extends Renderer {
   }
 
   override code({ text, lang }: { text: string; lang?: string }) {
-    const language = lang && hljs.getLanguage(lang) ? lang : 'plaintext'
+    const raw = (lang || '').trim().toLowerCase().split(/[/\s]+/)[0] ?? ''
+    const alias: Record<string, string> = {
+      yml: 'yaml',
+      sh: 'bash',
+      shell: 'bash',
+      zsh: 'bash',
+      js: 'javascript',
+      ts: 'typescript',
+      py: 'python',
+      rs: 'rust',
+      kt: 'kotlin',
+      cs: 'csharp',
+      docker: 'dockerfile',
+    }
+    const candidate = raw ? alias[raw] ?? raw : ''
+    const language = candidate && hljs.getLanguage(candidate) ? candidate : 'plaintext'
     let highlighted: string
     try {
       highlighted =
@@ -109,7 +147,8 @@ class AiRenderer extends Renderer {
     } catch {
       highlighted = escapeHtml(text)
     }
-    return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`
+    const safeLang = escapeHtml(language)
+    return `<pre><code class="hljs language-${safeLang}">${highlighted}</code></pre>`
   }
 }
 
