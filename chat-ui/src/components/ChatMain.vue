@@ -585,22 +585,31 @@ function runStream(
           resolve()
           return
         }
-        schedulePump()
+        /** 流已结束：可加大步进，尽快对齐全文 */
+        const remain = streamBuffer.length - streamShown
+        const burst = Math.min(remain, Math.max(24, Math.ceil(remain / 5)))
+        streamShown = Math.min(streamBuffer.length, streamShown + burst)
+        const tid = assistantId || streamTargetMessageId
+        if (tid) {
+          chat.messages = chat.messages.map((m) =>
+            m.id === tid ? { ...m, content: streamBuffer.slice(0, streamShown) } : m,
+          )
+        }
         requestAnimationFrame(step)
       }
       step()
     })
   }
 
+  /** SSE 未结束前：固定小步进，避免积压一大段时一帧跳上百字（看起来像整段输出） */
+  const TYPEWRITER_CHARS_PER_FRAME = 3
+
   const pumpTypewriter = () => {
     streamRaf = 0
     const tid = assistantId || streamTargetMessageId
     if (!tid) return
-    const backlog = streamBuffer.length - streamShown
-    /** 积压大时多字/帧快速追赶，保持「打字」感且首包可见 */
-    const perFrame = Math.min(200, Math.max(2, Math.ceil(backlog / 6) + 2))
     if (streamShown < streamBuffer.length) {
-      streamShown = Math.min(streamBuffer.length, streamShown + perFrame)
+      streamShown = Math.min(streamBuffer.length, streamShown + TYPEWRITER_CHARS_PER_FRAME)
       chat.messages = chat.messages.map((m) =>
         m.id === tid ? { ...m, content: streamBuffer.slice(0, streamShown) } : m,
       )
