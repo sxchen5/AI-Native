@@ -181,7 +181,8 @@ public class ChatAiStreamService {
             ChatCompletionCreateParams params = ChatCompletionCreateParams.builder()
                     .model(zhipuAiProperties.getModel())
                     .messages(messages)
-                    .stream(true)
+                    // 必须显式 true：null 时 SDK 走同步接口，会等整段生成完才返回（前端表现为一次性输出）
+                    .stream(Boolean.TRUE)
                     .temperature(0.7f)
                     .maxTokens(8192)
                     .build();
