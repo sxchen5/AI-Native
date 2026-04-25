@@ -79,6 +79,11 @@
   overflow-x: auto;
 }
 
+/* 流式阶段未跑 hljs：仍保持等宽与区块感 */
+.markdown-body .chat-code-block--stream-light .chat-code-body pre code.hljs {
+  color: var(--text-primary, #24292f);
+}
+
 /* 按语言微调 token 色相（hljs 类名在各语言中略有差异，以下为常见子集） */
 .markdown-body .chat-code-block[data-lang='json'] .hljs-attr {
   color: #0550ae;

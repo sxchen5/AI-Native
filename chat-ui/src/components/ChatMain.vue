@@ -155,17 +155,6 @@ function isAssistantStreaming(m: ChatMessage) {
   return m.role === 'ASSISTANT' && m.content.length === 0 && chat.sending
 }
 
-/** 流式输出中：最后一条助手用纯文本展示，避免每条 delta 都对全文做 Markdown/highlight 导致严重卡顿 */
-function useStreamingPlainBubble(m: ChatMessage, idx: number) {
-  return (
-    m.role === 'ASSISTANT' &&
-    !docMeta(m) &&
-    chat.sending &&
-    isLastMessage(idx) &&
-    (m.content?.length ?? 0) > 0
-  )
-}
-
 function showUserToolbar(idx: number, m: ChatMessage) {
   if (m.role !== 'USER') return false
   if (assistantReplyBusy.value && isLastMessage(idx)) return false
@@ -568,6 +557,74 @@ function runStream(
   streamAnimating.value = true
   let assistantId = ''
   let streamTargetMessageId = ''
+  /** SSE 已收全文；界面用打字机从该缓冲快速追赶展示 */
+  let streamBuffer = ''
+  let streamShown = 0
+  let streamRaf = 0
+
+  const flushStreamVisual = async () => {
+    if (!assistantId) return
+    if (streamShown < streamBuffer.length) {
+      streamShown = streamBuffer.length
+      chat.messages = chat.messages.map((m) =>
+        m.id === assistantId ? { ...m, content: streamBuffer } : m,
+      )
+      await nextTick()
+    }
+  }
+
+  function waitTypewriterCatchUp(): Promise<void> {
+    const deadline = performance.now() + 30_000
+    return new Promise((resolve) => {
+      const step = () => {
+        if (streamShown >= streamBuffer.length) {
+          resolve()
+          return
+        }
+        if (performance.now() > deadline) {
+          resolve()
+          return
+        }
+        schedulePump()
+        requestAnimationFrame(step)
+      }
+      step()
+    })
+  }
+
+  const pumpTypewriter = () => {
+    streamRaf = 0
+    const tid = assistantId || streamTargetMessageId
+    if (!tid) return
+    const backlog = streamBuffer.length - streamShown
+    /** 积压大时多字/帧快速追赶，保持「打字」感且首包可见 */
+    const perFrame = Math.min(200, Math.max(2, Math.ceil(backlog / 6) + 2))
+    if (streamShown < streamBuffer.length) {
+      streamShown = Math.min(streamBuffer.length, streamShown + perFrame)
+      chat.messages = chat.messages.map((m) =>
+        m.id === tid ? { ...m, content: streamBuffer.slice(0, streamShown) } : m,
+      )
+      const el = msgScrollEl.value
+      if (scrollStickToEnd.value && el && isScrollNearBottom(el)) {
+        void scrollToBottom(false)
+      }
+    }
+    if (streamShown < streamBuffer.length) {
+      streamRaf = requestAnimationFrame(pumpTypewriter)
+    }
+  }
+
+  const schedulePump = () => {
+    if (streamRaf) return
+    streamRaf = requestAnimationFrame(pumpTypewriter)
+  }
+
+  const stopTypewriter = () => {
+    if (streamRaf) {
+      cancelAnimationFrame(streamRaf)
+      streamRaf = 0
+    }
+  }
 
   const assistantPlaceholder: ChatMessage = {
     id: `local-ai-${Date.now()}`,
@@ -601,6 +658,8 @@ function runStream(
       modelContextJson: modelContextJson ?? undefined,
       onStart(id) {
         assistantId = id
+        streamBuffer = ''
+        streamShown = 0
         streamTargetMessageId = id
         chat.messages = chat.messages.map((m) =>
           m.id === assistantPlaceholder.id ? { ...m, id } : m,
@@ -608,16 +667,13 @@ function runStream(
       },
       onDelta(chunk) {
         if (!chunk) return
-        const tid = assistantId || streamTargetMessageId
-        chat.messages = chat.messages.map((m) =>
-          m.id === tid ? { ...m, content: (m.content || '') + chunk } : m,
-        )
-        const el = msgScrollEl.value
-        if (scrollStickToEnd.value && el && isScrollNearBottom(el)) {
-          void scrollToBottom(false)
-        }
+        streamBuffer += chunk
+        schedulePump()
       },
       async onDone() {
+        await waitTypewriterCatchUp()
+        stopTypewriter()
+        await flushStreamVisual()
         if (appendAfter) {
           await chat.fetchMessages(sid, { silent: true })
         }
@@ -632,6 +688,9 @@ function runStream(
       },
     })
     .catch(async (e: unknown) => {
+      await waitTypewriterCatchUp()
+      stopTypewriter()
+      await flushStreamVisual()
       streamAnimating.value = false
       if ((e as Error).name === 'AbortError') {
         ElMessage.info(t('errors.stopped'))
@@ -789,6 +848,12 @@ function docMeta(m: ChatMessage): DocumentCardMeta | null {
 function mdMessage(m: ChatMessage) {
   void locale.value
   return renderAiMarkdown(m.content, m.id)
+}
+
+/** 流式中最后一条助手：Markdown + 轻量代码块（无 hljs），与打字机切片同步 */
+function mdMessageStreaming(m: ChatMessage) {
+  void locale.value
+  return renderAiMarkdown(m.content, m.id, { lightCodeBlocks: true })
 }
 
 /** 每条助手气泡的 Markdown 标题目录（无标题的消息不在 Map 中） */
@@ -1223,7 +1288,11 @@ function askFollowUp(q: string) {
               <div v-if="isAssistantStreaming(m)" class="typing" aria-hidden="true">
                 <span class="dot" /><span class="dot" /><span class="dot" />
               </div>
-              <div v-else-if="useStreamingPlainBubble(m, idx)" class="ai-stream-plain">{{ m.content }}</div>
+              <div
+                v-else-if="m.role === 'ASSISTANT' && !docMeta(m) && chat.sending && isLastMessage(idx)"
+                class="prose-ai markdown-body"
+                v-html="mdMessageStreaming(m)"
+              />
               <div v-else class="prose-ai markdown-body" v-html="mdMessage(m)" />
             </div>
 
@@ -2199,12 +2268,6 @@ function askFollowUp(q: string) {
   line-height: 1.6;
   font-size: 14px;
   color: var(--text-primary);
-}
-
-.ai-stream-plain {
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
 .ai-toolbar-slot {

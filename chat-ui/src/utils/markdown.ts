@@ -113,34 +113,33 @@ function preprocessMarkdown(raw: string): string {
 let headingSlugRegistry: Set<string> | null = null
 /** 当前气泡 messageId 前缀，避免跨消息 id 冲突 */
 let headingIdPrefix = ''
+/**
+ * 流式阶段：代码块仍输出工具栏与 pre/code，但不跑 hljs（避免每条 delta 全量高亮卡顿）。
+ * 结束后用完整 {@link renderAiMarkdown} 再渲染一次即可恢复关键词着色。
+ */
+let codeBlockStreamLight = false
 
-class AiRenderer extends Renderer {
-  override heading({ tokens, depth }: Tokens.Heading) {
-    const used = headingSlugRegistry ?? new Set<string>()
-    const plain = chatHeadingPlainText(tokens as Token[])
-    const id = escapeHtml(headingIdPrefix + slugifyChatHeadingId(plain, used))
-    const inner = this.parser.parseInline(tokens)
-    return `<h${depth} id="${id}">${inner}</h${depth}>\n`
+function renderCodeBlockHtml(text: string, lang: string): string {
+  const raw = (lang || '').trim().toLowerCase().split(/[/\s]+/)[0] ?? ''
+  const alias: Record<string, string> = {
+    yml: 'yaml',
+    sh: 'bash',
+    shell: 'bash',
+    zsh: 'bash',
+    js: 'javascript',
+    ts: 'typescript',
+    py: 'python',
+    rs: 'rust',
+    kt: 'kotlin',
+    cs: 'csharp',
+    docker: 'dockerfile',
   }
-
-  override code({ text, lang }: { text: string; lang?: string }) {
-    const raw = (lang || '').trim().toLowerCase().split(/[/\s]+/)[0] ?? ''
-    const alias: Record<string, string> = {
-      yml: 'yaml',
-      sh: 'bash',
-      shell: 'bash',
-      zsh: 'bash',
-      js: 'javascript',
-      ts: 'typescript',
-      py: 'python',
-      rs: 'rust',
-      kt: 'kotlin',
-      cs: 'csharp',
-      docker: 'dockerfile',
-    }
-    const candidate = raw ? alias[raw] ?? raw : ''
-    const language = candidate && hljs.getLanguage(candidate) ? candidate : 'plaintext'
-    let highlighted: string
+  const candidate = raw ? alias[raw] ?? raw : ''
+  const language = candidate && hljs.getLanguage(candidate) ? candidate : 'plaintext'
+  let highlighted: string
+  if (codeBlockStreamLight) {
+    highlighted = escapeHtml(text)
+  } else {
     try {
       highlighted =
         language === 'plaintext'
@@ -149,11 +148,13 @@ class AiRenderer extends Renderer {
     } catch {
       highlighted = escapeHtml(text)
     }
-    const safeLang = escapeHtml(language)
-    const displayLang = escapeHtml(inferLangFromCode(text, language))
-    const collapse = escapeHtml(i18n.global.t('chat.collapseCode') as string)
-    const copyLabel = escapeHtml(i18n.global.t('chat.copyCode') as string)
-    return `<div class="chat-code-block" data-lang="${displayLang}">
+  }
+  const safeLang = escapeHtml(language)
+  const displayLang = escapeHtml(inferLangFromCode(text, language))
+  const collapse = escapeHtml(i18n.global.t('chat.collapseCode') as string)
+  const copyLabel = escapeHtml(i18n.global.t('chat.copyCode') as string)
+  const streamCls = codeBlockStreamLight ? ' chat-code-block--stream-light' : ''
+  return `<div class="chat-code-block${streamCls}" data-lang="${displayLang}">
 <div class="chat-code-toolbar">
 <div class="chat-code-toolbar-left">
 <span class="chat-code-lang">${displayLang}</span>
@@ -165,6 +166,19 @@ class AiRenderer extends Renderer {
 <pre><code class="hljs language-${safeLang}">${highlighted}</code></pre>
 </div>
 </div>`
+}
+
+class AiRenderer extends Renderer {
+  override heading({ tokens, depth }: Tokens.Heading) {
+    const used = headingSlugRegistry ?? new Set<string>()
+    const plain = chatHeadingPlainText(tokens as Token[])
+    const id = escapeHtml(headingIdPrefix + slugifyChatHeadingId(plain, used))
+    const inner = this.parser.parseInline(tokens)
+    return `<h${depth} id="${id}">${inner}</h${depth}>\n`
+  }
+
+  override code({ text, lang }: { text: string; lang?: string }) {
+    return renderCodeBlockHtml(text, lang ?? '')
   }
 }
 
@@ -176,8 +190,8 @@ const marked = new Marked({
 
 const PURIFY_OPTS = {
   USE_PROFILES: { html: true },
-  ADD_ATTR: ['align', 'id', 'aria-expanded', 'aria-label', 'type', 'data-lang'],
-  ADD_TAGS: ['button'],
+  ADD_ATTR: ['align', 'id', 'aria-expanded', 'aria-label', 'type', 'data-lang', 'class'],
+  ADD_TAGS: ['button', 'div', 'span', 'pre', 'code'],
 }
 
 /**
@@ -187,15 +201,26 @@ const PURIFY_OPTS = {
 /**
  * @param messageId 可选；传入时为标题 id 加前缀，与 {@link extractChatMarkdownHeadingToc} 一致且避免多气泡 id 重复
  */
-export function renderAiMarkdown(raw: string, messageId?: string): string {
+export type RenderAiMarkdownOptions = {
+  /** 流式输出中：代码块不跑语法高亮，仅转义 + 工具栏，显著降低每条 delta 的 CPU */
+  lightCodeBlocks?: boolean
+}
+
+export function renderAiMarkdown(
+  raw: string,
+  messageId?: string,
+  opts?: RenderAiMarkdownOptions,
+): string {
   const md = preprocessMarkdown(raw || '')
   headingSlugRegistry = new Set<string>()
   headingIdPrefix = messageId ? `${sanitizeMessageIdForHeadingPrefix(messageId)}-` : ''
+  codeBlockStreamLight = opts?.lightCodeBlocks === true
   try {
     const html = marked.parse(md, { async: false }) as string
     return DOMPurify.sanitize(html, PURIFY_OPTS) as unknown as string
   } finally {
     headingSlugRegistry = null
     headingIdPrefix = ''
+    codeBlockStreamLight = false
   }
 }
