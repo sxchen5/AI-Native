@@ -1393,10 +1393,10 @@ function askFollowUp(q: string) {
   padding-right: 10px;
 }
 .main--embedded .msg-scroll {
-  padding: 16px 25px 25px;
+  padding: 20px 66px 62px;
 }
 .main--embedded .composer {
-  padding: 0px 22px 12px 12px;
+  padding: 0px 72px 12px 62px;
 }
 .main--embedded .composer-inner {
   max-width: 100%;
@@ -1769,7 +1769,7 @@ function askFollowUp(q: string) {
   overflow-y: auto;
   overflow-x: hidden;
   scroll-behavior: smooth;
-  padding: 20px 16px 12px;
+  padding: 20px 66px 62px;
   background: var(--bg-chat-surface);
 }
 
@@ -2152,7 +2152,7 @@ function askFollowUp(q: string) {
 
 .composer {
   background: var(--bg-chat-surface);
-  padding: 0px 22px 12px 12px;
+  padding: 0px 72px 12px 62px;
 }
 .composer-inner {
   position: relative;
