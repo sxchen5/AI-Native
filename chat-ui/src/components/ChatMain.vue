@@ -197,7 +197,7 @@ async function onSend() {
   overflow-y: auto;
   overflow-x: hidden;
   scroll-behavior: smooth;
-  padding: 20px 16px 12px;
+  padding: 20px 66px 62px;
 }
 
 .empty {
@@ -347,7 +347,7 @@ async function onSend() {
 .composer {
   border-top: 1px solid var(--border-subtle);
   background: var(--bg-elevated);
-  padding: 14px 16px 16px;
+  padding: 0px 72px 12px 62px;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 12px;
