@@ -1381,7 +1381,7 @@ function askFollowUp(q: string) {
   min-width: 0;
   min-height: 0;
   background: var(--bg-chat-surface);
-  --chat-content-max: min(890px, calc(100% - 150px));
+  --chat-content-max: min(790px, calc(100% - 250px));
 }
 
 /* 画布分屏内嵌：左右留白收紧，内容区占满可用宽度 */
@@ -1730,7 +1730,7 @@ function askFollowUp(q: string) {
 }
 
 .thread-head-inner {
-  max-width: var(--chat-content-max, min(890px, calc(100% - 150px)));
+  max-width: var(--chat-content-max, min(790px, calc(100% - 250px)));
   margin: 0 auto;
   text-align: center;
 }
@@ -1776,7 +1776,7 @@ function askFollowUp(q: string) {
 .follow-up-inline {
   margin-top: 10px;
   width: 100%;
-  max-width: var(--chat-content-max, min(890px, calc(100% - 150px)));
+  max-width: var(--chat-content-max, min(790px, calc(100% - 250px)));
 }
 
 .follow-up-inline-chips {
@@ -1971,7 +1971,7 @@ function askFollowUp(q: string) {
 }
 
 .msg-inner {
-  max-width: var(--chat-content-max, min(890px, calc(100% - 150px)));
+  max-width: var(--chat-content-max, min(790px, calc(100% - 250px)));
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -2156,7 +2156,7 @@ function askFollowUp(q: string) {
 }
 .composer-inner {
   position: relative;
-  max-width: var(--chat-content-max, min(890px, calc(100% - 150px)));
+  max-width: var(--chat-content-max, min(790px, calc(100% - 250px)));
   margin: 0 auto;
 }
 
